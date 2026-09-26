@@ -1,0 +1,41 @@
+# RPPO (recurrent RL^2) Configuration for OpenCleanup (hidden-rule variant)
+defaults:
+  - rppo_base
+  - _self_
+  - reward: common  # override on CLI: reward=individual
+
+# Environment-specific settings
+"ENV_NAME": "open_cleanup"
+
+"ENV_KWARGS":
+  "num_agents": 7
+  "num_inner_steps": 1000
+  "num_outer_steps": 10
+  "cnn": True
+  "jit": True
+  # Training curriculum. At initial_dirt=1.0 every trial opens above the
+  # pollution threshold and a random policy scores exactly zero in 8/8 seeds,
+  # which is precisely why a full 1e8-step run returned nothing. Drawing the
+  # opening dirt from a range puts easy trials (reward from step one) in the
+  # same batch as hard ones (where the tool rule decides the return), so the
+  # gradient never vanishes. 0.7 is the hardest lower bound that still leaves
+  # a random policy scoring in most seeds.
+  # Evaluation overrides this to 1.0 — the regime the design gate measured.
+  "initial_dirt": [0.7, 1.0]
+  # Oracle-input control: true appends the hidden rule to the observation
+  # (18 one-hot channels), training a policy WITH the rule. Bounds what
+  # inference is worth to a trained policy; never true in a scored run.
+  "reveal_rule": False
+  # Per-trial skewed waste: each trial is dominated by one waste type, so
+  # only the full rule table carried across trials opens every trial with
+  # the right tool. On: this is the regime the in-context evidence was
+  # measured in — without the skew there is no per-trial "trick" to infer.
+  "skewed_waste": True
+  "waste_skew": 0.8
+  # Cleaning chains (XLand production rules): 1 = plain tool table;
+  # 2 = each colour is, with prob p_chain, a two-hit chain (tool turns it
+  # into a direct colour, whose tool then clears it). No dead ends.
+  "chain_depth": 1
+  "p_chain": 0.5
+  # One-to-one rules: tools = colours, permutation rules (deliberately harder)
+  "bijective_rules": False

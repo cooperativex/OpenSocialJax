@@ -1,0 +1,56 @@
+{
+ "name": "open_cleanup_schelling",
+ "game": "cleanup",
+ "description": "OpenCleanup, 5 agents, individual rewards, gpt-6-luna in every seat; each agent told it is a cooperator or a defector (prompt 1.5 YOUR ROLE); k = 0..5 cooperators, for a Schelling diagram.",
+ "about": "Setting and gpt-6-luna's provider spec copied verbatim from experiments/open_cleanup_5ag/config.json (same seeds, so the same maps and hidden rules). The prompt is the formal one except, for every agent, 1.1 states the scoring rule only and 1.5 YOUR ROLE follows 1.4 (open_cleanup_prompt.ROLES / open_harvest_prompt.ROLES); 1.1 rewritten as the scoring rule, harvest roles in points, both games x 3 seeds. Run with llm_policy/run_schelling.py.",
+ "setting": {
+  "agents": 5,
+  "history": 15,
+  "inner": 400,
+  "outer": 5,
+  "seeds": [
+   906,
+   907,
+   908
+  ],
+  "skew": 1.0,
+  "reward": "individual",
+  "spawn": 0.1,
+  "tools": "shared",
+  "random_layout": true,
+  "max_tokens": 6000,
+  "lenient": false,
+  "needed_hint": false,
+  "reveal_orders": false,
+  "curriculum": "none"
+ },
+ "model": "gpt-6-luna",
+ "models": {
+  "gpt-6-luna": {
+   "kind": "api",
+   "model": "gpt-6-luna",
+   "base_url": "https://api.openai.com/v1",
+   "key_file": "~/.config/openai/key",
+   "token_param": "max_completion_tokens",
+   "schema_mode": "json_schema",
+   "max_tokens": 32000,
+   "thinking": "default effort",
+   "price": {
+    "input": 0.1,
+    "cached": 0.01,
+    "output": 0.5
+   },
+   "time": "24:00:00"
+  }
+ },
+ "compositions": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "rotation": "cyclic",
+ "rotation_note": "seat i is a cooperator when (i + j) % 5 < k, j = the seed's index in setting.seeds"
+}

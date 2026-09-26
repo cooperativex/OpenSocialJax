@@ -1,0 +1,183 @@
+{
+ "name": "open_cleanup_5ag",
+ "description": "OpenCleanup, 5 agents, individual rewards, homogeneous populations (every seat the same model). A held-out random map per seed, kept across the 5 trials; one waste hue per meta-episode; 15 recent steps shown; 3 seeds x 5 trials x 400 steps.",
+ "game": "cleanup",
+ "setting": {
+  "agents": 5,
+  "history": 15,
+  "inner": 400,
+  "outer": 5,
+  "seeds": [
+   906,
+   907,
+   908
+  ],
+  "skew": 1.0,
+  "reward": "individual",
+  "spawn": 0.1,
+  "tools": "shared",
+  "random_layout": true,
+  "max_tokens": 6000,
+  "lenient": false,
+  "needed_hint": false,
+  "reveal_orders": false,
+  "curriculum": "none"
+ },
+ "models": {
+  "gpt-6-luna": {
+   "kind": "api",
+   "model": "gpt-6-luna",
+   "base_url": "https://api.openai.com/v1",
+   "key_file": "~/.config/openai/key",
+   "token_param": "max_completion_tokens",
+   "schema_mode": "json_schema",
+   "max_tokens": 32000,
+   "thinking": "default effort",
+   "price": {
+    "input": 0.1,
+    "cached": 0.01,
+    "output": 0.5
+   },
+   "time": "24:00:00"
+  },
+  "gpt-6-sol": {
+   "kind": "api",
+   "model": "gpt-6-sol",
+   "base_url": "https://api.openai.com/v1",
+   "key_file": "~/.config/openai/key",
+   "token_param": "max_completion_tokens",
+   "schema_mode": "json_schema",
+   "max_tokens": 32000,
+   "thinking": "default effort",
+   "price": {
+    "input": 2.0,
+    "cached": 0.2,
+    "output": 10.0
+   },
+   "time": "24:00:00"
+  },
+  "claude-opus-5.5": {
+   "kind": "anthropic",
+   "model": "claude-opus-5-5",
+   "key_file": "~/.config/anthropic/key",
+   "effort": "medium",
+   "max_tokens": 16000,
+   "thinking": "default effort (medium); no structured output (refused as reasoning_extraction)",
+   "price": {
+    "input": 4.0,
+    "cached": 0.2,
+    "output": 20.0,
+    "cache_write": 5.0,
+    "input_includes_cached": false
+   },
+   "time": "24:00:00",
+   "seeds": [
+    906,
+    907,
+    908
+   ]
+  },
+  "deepseek-v4.1-flash-nothink": {
+   "kind": "api",
+   "model": "deepseek-flash",
+   "base_url": "https://api.deepseek.com/v1",
+   "key_file": "~/.config/deepseek/key",
+   "schema_mode": "json_object",
+   "reasoning_effort": "none",
+   "temperature": 0.2,
+   "max_tokens": 32000,
+   "thinking": "off, reasoning_effort=none",
+   "offpeak_only": true,
+   "peak_utc": [
+    [
+     1,
+     4
+    ],
+    [
+     6,
+     10
+    ]
+   ],
+   "price": {
+    "input": 0.15,
+    "cached": 0.003,
+    "output": 0.6
+   },
+   "price_note": "off-peak rates; runs pause during peak",
+   "time": "24:00:00"
+  },
+  "glm-5.3-flash": {
+   "kind": "api",
+   "model": "glm-5.3-flash",
+   "base_url": "https://open.bigmodel.cn/api/paas/v4",
+   "key_file": "~/.config/zhipu/key",
+   "schema_mode": "json_object",
+   "reasoning_effort": "low",
+   "temperature": 0.2,
+   "max_tokens": 16000,
+   "thinking": "always on, reasoning_effort=low",
+   "price": {
+    "input": 0.15,
+    "cached": 0.03,
+    "output": 0.5
+   },
+   "time": "24:00:00"
+  },
+  "qwen3.8-27b": {
+   "kind": "vllm",
+   "model_dir": "models/Qwen3.8-27B",
+   "think_effort": "medium",
+   "max_tokens": 6000,
+   "gpus": 2,
+   "venv": "~/venvs/vllm",
+   "serve": "legacy",
+   "vllm_extra": "--gdn-prefill-backend triton --reasoning-parser qwen3 --tensor-parallel-size 2 --speculative-config {\"method\":\"mtp\",\"num_speculative_tokens\":2}",
+   "thinking": "on, medium",
+   "time": "24:00:00",
+   "seeds": [
+    906,
+    907,
+    908,
+    "906r1",
+    "906r2",
+    "907r1",
+    "907r2",
+    "908r1",
+    "908r2"
+   ]
+  },
+  "gemma-4-31b": {
+   "kind": "vllm",
+   "model_dir": "models/gemma-4-31B-it",
+   "think_effort": "medium",
+   "max_tokens": 8000,
+   "gpus": 2,
+   "venv": "~/venvs/vllm029",
+   "serve": "open",
+   "vllm_extra": "--reasoning-parser gemma4 --limit-mm-per-prompt {\"image\":0,\"video\":0,\"audio\":0}",
+   "thinking": "on (effort ignored by its template)",
+   "time": "24:00:00"
+  },
+  "qwen3.5-4b": {
+   "kind": "vllm",
+   "model_dir": "models/Qwen3.5-4B",
+   "max_tokens": 6000,
+   "gpus": 1,
+   "venv": "~/venvs/vllm",
+   "serve": "legacy",
+   "vllm_extra": "--gdn-prefill-backend triton --reasoning-parser qwen3 --speculative-config {\"method\":\"mtp\",\"num_speculative_tokens\":2}",
+   "thinking": "on (the model default); this chat template has no effort levels, only on/off",
+   "time": "24:00:00",
+   "temperature": 1.0,
+   "sampling": {
+    "top_p": 0.95,
+    "top_k": 20,
+    "presence_penalty": 1.5
+   },
+   "sampling_note": "the model card's thinking-mode settings. At the experiment default (temperature 0.2, no presence penalty) the 4B looped: 55 of its first 62 replies repeated one line until the 6000-token cap; those runs were discarded.",
+   "think_budget": 3000,
+   "think_budget_note": "at most 3000 thinking tokens per step; past that the harness closes the think block (\"Considering the limited time, I will stop thinking here and answer now...\") and asks for the JSON answer. Without it the 4B ran into the 6000-token cap on ~60% of steps."
+  }
+ },
+ "about": "The main OpenCleanup experiment of the paper. Seeds 906-908 fix the map, the hidden rule and the waste hue, so every model faces the same three problems. Qwen3.8-27B additionally replays each seed's problem twice under other run randomness (906r1, 906r2, ...) to estimate run-to-run variance."
+}

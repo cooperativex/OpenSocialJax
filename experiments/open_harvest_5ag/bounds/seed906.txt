@@ -1,0 +1,6 @@
+greedy      keep=3 | team points/trial [53.0, 34.3, 39.7, 36.1, 41.3] total 204.4 | eaten/trial [65, 66, 65, 68, 66] | rotted [0, 0, 0, 0, 0]
+patient     keep=3 | team points/trial [50.8, 63.7, 49.8, 51.4, 52.1] total 267.8 | eaten/trial [72, 79, 64, 63, 64] | rotted [4, 4, 2, 2, 3]
+oracle      keep=3 | team points/trial [119.3, 147.5, 135.9, 136.4, 133.7] total 672.8 | eaten/trial [144, 168, 154, 165, 161] | rotted [84, 84, 76, 88, 74]
+oracle      keep=2 | team points/trial [75.3, 76.1, 78.5, 91.5, 74.2] total 395.6 | eaten/trial [94, 91, 93, 104, 92] | rotted [57, 51, 51, 54, 42]
+oracle_opt  keep=3 | team points/trial [119.3, 147.5, 135.9, 136.4, 133.7] total 672.8 | eaten/trial [144, 168, 154, 165, 161] | rotted [84, 84, 76, 88, 74]
+oracle_fast keep=3 | team points/trial [61.4, 65.0, 66.0, 64.3, 69.4] total 326.1 | eaten/trial [190, 186, 189, 202, 202] | rotted [112, 95, 105, 92, 88]
