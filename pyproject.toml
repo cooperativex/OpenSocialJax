@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opensocialjax"
+version = "0.1.0"
+description = "Two sequential social dilemmas with hidden rules to discover, in JAX, and a harness for LLM agents to play them"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+license = {file = "LICENSE"}
+dependencies = []   # pinned in environment.yml / requirements.txt
+
+[tool.setuptools.packages.find]
+include = ["opensocialjax*", "llm_policy*", "algorithms*", "tests*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.npz", "*.yaml", "*.json", "*.md"]

@@ -1,0 +1,21 @@
+name: tests
+
+on: [push, pull_request]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+    - name: Install (the CI runner has no GPU: CPU JAX instead of the CUDA wheels)
+      run: |
+        python -m pip install --upgrade pip
+        sed 's/^jax\[cuda12\]==/jax==/' requirements.txt > requirements-cpu.txt
+        pip install -r requirements-cpu.txt -e .
+    - name: Environment tests
+      run: python -m pytest tests -q
+    - name: Speed test (smoke)
+      run: python speed_test/speed_test_random.py --num-envs 1,8 --num-steps 20

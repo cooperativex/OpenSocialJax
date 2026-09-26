@@ -1,0 +1,88 @@
+# Base IPPO Configuration
+# Common hyperparameters shared across all IPPO experiments
+# Individual configs can override these defaults
+
+# PPO Training hyperparameters
+"LR": 0.0005
+"NUM_ENVS": 256
+# TBPTT chunk length, the analog of XLand-MiniGrid's num_steps_per_update=32:
+# the hidden state is carried across updates, so gradients see NUM_STEPS-long
+# windows while memory itself spans the whole meta-episode. Keep it a divisor
+# of num_inner_steps*num_outer_steps so meta-episode boundaries land on
+# rollout edges. 125 divides the 10 x 1000 meta-episode (80 chunks). The
+# previous full-episode setting (1000) backpropagated through the entire
+# meta-episode at once — the gradient mostly vanished and the run that
+# produced the negative result trained that way.
+"NUM_STEPS": 125
+"TOTAL_TIMESTEPS": 1e8
+"UPDATE_EPOCHS": 1        # XLand-MiniGrid recipe. NB: this deliberately breaks
+                         # the "same optimisation budget as IPPO" matching the
+                         # first negative-result run kept; the comparison is
+                         # now at the outcome level (held-out return), not the
+                         # budget level.
+"NUM_MINIBATCHES": 4     # minibatches split ACTORS, not steps (sequences stay whole)
+"GAMMA": 0.99
+"GAE_LAMBDA": 0.95
+"CLIP_EPS": 0.2
+"ENT_COEF": 0.01
+"VF_COEF": 0.5
+"MAX_GRAD_NORM": 0.5
+"ACTIVATION": "relu"
+
+# Environment defaults (common settings)
+"ENV_KWARGS":
+  "num_inner_steps": 1000
+  "shared_rewards": False
+  "cnn": True
+  "jit": True
+
+# Training settings
+"ANNEAL_LR": True
+"PARAMETER_SHARING": True
+"TUNE": False
+
+# Seed and evaluation
+"SEED": 30
+"NUM_SEEDS": 1
+"GIF_NUM_FRAMES": 250
+
+# WandB defaults
+"ENTITY": ""
+"PROJECT": "opensocialjax"
+"WANDB_MODE": "online"
+
+# --- recurrent (RL^2) specific ------------------------------------------------
+# The GRU carries evidence across the trials of a meta-episode, and the policy
+# additionally sees its previous action and previous reward. Sizes follow the
+# XLand-MiniGrid meta-task recipe (rnn 1024, heads 256, adam eps 1e-8); the
+# negative-result run used rnn 128 / heads 64 / eps 1e-5.
+"RNN_HIDDEN_SIZE": 1024
+"HEAD_HIDDEN_SIZE": 256
+"ADAM_EPS": 1.0e-8
+# Self-supervised auxiliary loss weight: from the hidden state, predict
+# whether this step's cleaning shot clears its target (masked to firing
+# steps). 0 disables. Probes showed PPO alone never writes that evidence
+# into the GRU; this makes encoding it part of the objective.
+"AUX_COEF": 0.0
+# Sampled benchmark (only used when ENV_KWARGS.chain_depth >= 2, where the
+# rule space is not enumerable): seed and number of draws before dedup.
+"BENCH_SEED": 0
+"BENCH_SIZE": 100000
+# Path to a checkpoint to initialise from (curriculum); empty = fresh init.
+"WARM_START": ""
+
+# --- XLand-style rule benchmark protocol --------------------------------------
+# The rule space is split once; training only ever sees RULE_SPLIT of it and
+# evaluation only ever sees the rest, so "did it adapt?" is separable from
+# "did it memorise every rule?".
+"RULE_SPLIT": 0.8
+"RULE_SPLIT_SEED": 0
+# random: shuffle+split by index. predicate: hold out every ruleset where
+# RULE_HOLDOUT_WASTE is cleared by RULE_HOLDOUT_TOOL, so that pairing is
+# semantically unseen in training (XLand's filter_split).
+"RULE_SPLIT_MODE": "random"
+"RULE_HOLDOUT_WASTE": 0
+"RULE_HOLDOUT_TOOL": 2
+"EVAL_EVERY": 50          # updates between held-out evaluations
+"EVAL_NUM_ENVS": 64
+"EVAL_SEED": 42           # fixed, so the eval curve is comparable across runs

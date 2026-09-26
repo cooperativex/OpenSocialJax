@@ -1,0 +1,43 @@
+{
+ "name": "demo",
+ "game": "cleanup",
+ "description": "A two-minute OpenCleanup run to see the harness work: 5 agents, 2 trials of 40 steps, seed 906. 'scripted' is a fixed policy that needs no model or key; 'gpt-6-luna' shows how an API model is declared (edit or add your own).",
+ "setting": {
+  "agents": 5,
+  "history": 15,
+  "inner": 40,
+  "outer": 2,
+  "seeds": [
+   906
+  ],
+  "skew": 1.0,
+  "spawn": 0.1,
+  "tools": "shared",
+  "random_layout": true,
+  "max_tokens": 6000,
+  "lenient": false,
+  "needed_hint": false,
+  "reveal_orders": false,
+  "curriculum": "none"
+ },
+ "models": {
+  "scripted": {
+   "kind": "scripted",
+   "note": "a fixed policy: walks, picks up, fires; no model is called"
+  },
+  "gpt-6-luna": {
+   "kind": "api",
+   "model": "gpt-6-luna",
+   "base_url": "https://api.openai.com/v1",
+   "key_file": "~/.config/openai/key",
+   "token_param": "max_completion_tokens",
+   "schema_mode": "json_schema",
+   "max_tokens": 32000,
+   "price": {
+    "input": 0.1,
+    "cached": 0.01,
+    "output": 0.5
+   }
+  }
+ }
+}
