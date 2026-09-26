@@ -1,0 +1,35 @@
+# IPPO Configuration for OpenCleanup (hidden-rule variant)
+defaults:
+  - ippo_base
+  - _self_
+  - reward: common  # override on CLI: reward=individual
+
+# Environment-specific settings
+"ENV_NAME": "open_cleanup"
+
+"ENV_KWARGS":
+  "num_agents": 7
+  "num_inner_steps": 1000
+  "num_outer_steps": 10
+  "cnn": True
+  "jit": True
+  # Training curriculum. At initial_dirt=1.0 every trial opens above the
+  # pollution threshold and a random policy scores exactly zero in 8/8 seeds,
+  # which is precisely why a full 1e8-step run returned nothing. Drawing the
+  # opening dirt from a range puts easy trials (reward from step one) in the
+  # same batch as hard ones (where the tool rule decides the return), so the
+  # gradient never vanishes. 0.7 is the hardest lower bound that still leaves
+  # a random policy scoring in most seeds.
+  # Evaluation overrides this to 1.0 — the regime the design gate measured.
+  "initial_dirt": [0.7, 1.0]
+  # Oracle-input control: true appends the hidden rule to the observation
+  # (18 one-hot channels), training a policy WITH the rule. Bounds what
+  # inference is worth to a trained policy; never true in a scored run.
+  "reveal_rule": False
+  # Match the RPPO control's environment exactly: the feed-forward baseline
+  # is only a valid comparison if it faces the same per-trial waste skew.
+  "skewed_waste": True
+  "waste_skew": 0.8
+  "chain_depth": 1
+  "p_chain": 0.5
+  "bijective_rules": False

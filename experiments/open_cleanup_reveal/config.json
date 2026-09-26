@@ -1,0 +1,91 @@
+{
+ "name": "open_cleanup_reveal",
+ "game": "cleanup",
+ "description": "Rule-reveal ablation, one trial: every agent is given the true recipes (which pick-up order makes which working tool and what it does) at the start. Homogeneous populations of Claude Opus 5.5, gpt-6-sol, GLM-5.3-Flash and Qwen3.8-27B, seeds 906-908.",
+ "about": "Setting and model specs copied verbatim from experiments/open_cleanup_5ag/config.json, except stop_after_trials = 1 (outer stays 5, so the prompt and the environment match the formal runs; the run ends after trial 1) and reveal_orders = true. Compare with trial 1 of the formal runs on the same seeds (same map, rules and hues; the only difference is that the rules are given). Prompts unchanged; the ledger says the given rules are true.",
+ "setting": {
+  "agents": 5,
+  "history": 15,
+  "inner": 400,
+  "outer": 5,
+  "seeds": [
+   906,
+   907,
+   908
+  ],
+  "skew": 1.0,
+  "reward": "individual",
+  "spawn": 0.1,
+  "tools": "shared",
+  "random_layout": true,
+  "max_tokens": 6000,
+  "lenient": false,
+  "needed_hint": false,
+  "reveal_orders": true,
+  "curriculum": "none",
+  "stop_after_trials": 1
+ },
+ "models": {
+  "claude-opus-5.5": {
+   "kind": "anthropic",
+   "model": "claude-opus-5-5",
+   "key_file": "~/.config/anthropic/key",
+   "effort": "medium",
+   "max_tokens": 16000,
+   "thinking": "default effort (medium); no structured output (refused as reasoning_extraction)",
+   "price": {
+    "input": 4.0,
+    "cached": 0.2,
+    "output": 20.0,
+    "cache_write": 5.0,
+    "input_includes_cached": false
+   },
+   "time": "24:00:00"
+  },
+  "gpt-6-sol": {
+   "kind": "api",
+   "model": "gpt-6-sol",
+   "base_url": "https://api.openai.com/v1",
+   "key_file": "~/.config/openai/key",
+   "token_param": "max_completion_tokens",
+   "schema_mode": "json_schema",
+   "max_tokens": 32000,
+   "thinking": "default effort",
+   "price": {
+    "input": 2.0,
+    "cached": 0.2,
+    "output": 10.0
+   },
+   "time": "24:00:00"
+  },
+  "glm-5.3-flash": {
+   "kind": "api",
+   "model": "glm-5.3-flash",
+   "base_url": "https://open.bigmodel.cn/api/paas/v4",
+   "key_file": "~/.config/zhipu/key",
+   "schema_mode": "json_object",
+   "reasoning_effort": "low",
+   "temperature": 0.2,
+   "max_tokens": 16000,
+   "thinking": "always on, reasoning_effort=low",
+   "price": {
+    "input": 0.15,
+    "cached": 0.03,
+    "output": 0.5
+   },
+   "time": "24:00:00"
+  },
+  "qwen3.8-27b": {
+   "kind": "vllm",
+   "model_dir": "models/Qwen3.8-27B",
+   "think_effort": "medium",
+   "max_tokens": 6000,
+   "gpus": 2,
+   "venv": "~/venvs/vllm",
+   "serve": "legacy",
+   "vllm_extra": "--gdn-prefill-backend triton --reasoning-parser qwen3 --tensor-parallel-size 2 --speculative-config {\"method\":\"mtp\",\"num_speculative_tokens\":2}",
+   "thinking": "on, medium",
+   "time": "24:00:00"
+  }
+ }
+}

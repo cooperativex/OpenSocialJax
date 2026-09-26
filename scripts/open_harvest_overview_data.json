@@ -1,0 +1,132 @@
+{
+ "seed": 906,
+ "layout": 33,
+ "pool_size": 256,
+ "held_out": 51,
+ "hues": [
+  "red",
+  "yellow",
+  "green",
+  "cyan",
+  "purple"
+ ],
+ "patches": [
+  {
+   "hue": "cyan",
+   "trees": 13,
+   "top_left": [
+    4,
+    9
+   ]
+  },
+  {
+   "hue": "cyan",
+   "trees": 13,
+   "top_left": [
+    5,
+    1
+   ]
+  },
+  {
+   "hue": "green",
+   "trees": 13,
+   "top_left": [
+    5,
+    16
+   ]
+  },
+  {
+   "hue": "cyan",
+   "trees": 13,
+   "top_left": [
+    11,
+    6
+   ]
+  },
+  {
+   "hue": "purple",
+   "trees": 6,
+   "top_left": [
+    12,
+    13
+   ]
+  },
+  {
+   "hue": "yellow",
+   "trees": 6,
+   "top_left": [
+    13,
+    18
+   ]
+  }
+ ],
+ "pay": [
+  [
+   0.25,
+   0.5,
+   1.0
+  ],
+  [
+   0.5,
+   0.25,
+   1.0
+  ],
+  [
+   0.25,
+   1.0,
+   0.5
+  ],
+  [
+   0.5,
+   1.0,
+   0.25
+  ],
+  [
+   0.25,
+   0.5,
+   1.0
+  ]
+ ],
+ "speed": [
+  [
+   2.0,
+   1.0,
+   0.5
+  ],
+  [
+   0.5,
+   2.0,
+   1.0
+  ],
+  [
+   2.0,
+   1.0,
+   0.5
+  ],
+  [
+   0.5,
+   1.0,
+   2.0
+  ],
+  [
+   1.0,
+   0.5,
+   2.0
+  ]
+ ],
+ "stage_pay": [
+  1.0,
+  0.5,
+  0.25
+ ],
+ "rates": [
+  2.0,
+  1.0,
+  0.5
+ ],
+ "map_png": "docs/figures/harvest_overview_seed906.png",
+ "grid": [
+  16,
+  22
+ ]
+}

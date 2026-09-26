@@ -1,0 +1,127 @@
+{
+ "name": "open_harvest_arena",
+ "game": "harvest",
+ "description": "OpenHarvest, 5 agents, individual rewards, arena: Claude Opus 5.5, gpt-6-sol, GLM-5.3-Flash, DeepSeek V4.1 Flash (no thinking) and Qwen3.8-27B in one game, seats rotated per seed.",
+ "setting": {
+  "agents": 5,
+  "history": 15,
+  "inner": 300,
+  "outer": 5,
+  "seeds": [
+   906,
+   907,
+   908
+  ],
+  "reward": "individual",
+  "pool": "orig6",
+  "respawn_wait": 12,
+  "ripen": 25,
+  "ripen_range": "15,20",
+  "rot_range": "2,5",
+  "rates": "2,1,0.5",
+  "max_tokens": 6000,
+  "early_stop": true
+ },
+ "about": "Arena: five different models play one game together, one per seat. Setting copied verbatim from experiments/open_harvest_5ag/config.json (same seeds, so the same maps / hidden rules as the homogeneous runs), and so is every model's provider spec. Prompts are unchanged; agents are not told which model the others are. Run with llm_policy/run_arena.py.",
+ "roster": [
+  "claude-opus-5.5",
+  "gpt-6-sol",
+  "glm-5.3-flash",
+  "deepseek-v4.1-flash-nothink",
+  "qwen3.8-27b"
+ ],
+ "rotation": "cyclic",
+ "rotation_note": "seat i (agent letter A-E, its spawn) plays roster[(i + k) % 5], k = the seed's index in setting.seeds; so every seed shifts the seating by one",
+ "models": {
+  "claude-opus-5.5": {
+   "kind": "anthropic",
+   "model": "claude-opus-5-5",
+   "key_file": "~/.config/anthropic/key",
+   "effort": "medium",
+   "max_tokens": 16000,
+   "thinking": "default effort (medium); no structured output (refused as reasoning_extraction)",
+   "price": {
+    "input": 4.0,
+    "cached": 0.2,
+    "output": 20.0,
+    "cache_write": 5.0,
+    "input_includes_cached": false
+   },
+   "time": "24:00:00"
+  },
+  "gpt-6-sol": {
+   "kind": "api",
+   "model": "gpt-6-sol",
+   "base_url": "https://api.openai.com/v1",
+   "key_file": "~/.config/openai/key",
+   "token_param": "max_completion_tokens",
+   "schema_mode": "json_schema",
+   "max_tokens": 32000,
+   "thinking": "default effort",
+   "price": {
+    "input": 2.0,
+    "cached": 0.2,
+    "output": 10.0
+   },
+   "time": "24:00:00"
+  },
+  "glm-5.3-flash": {
+   "kind": "api",
+   "model": "glm-5.3-flash",
+   "base_url": "https://open.bigmodel.cn/api/paas/v4",
+   "key_file": "~/.config/zhipu/key",
+   "schema_mode": "json_object",
+   "reasoning_effort": "low",
+   "temperature": 0.2,
+   "max_tokens": 16000,
+   "thinking": "always on, reasoning_effort=low",
+   "price": {
+    "input": 0.15,
+    "cached": 0.03,
+    "output": 0.5
+   },
+   "time": "24:00:00"
+  },
+  "deepseek-v4.1-flash-nothink": {
+   "kind": "api",
+   "model": "deepseek-flash",
+   "base_url": "https://api.deepseek.com/v1",
+   "key_file": "~/.config/deepseek/key",
+   "schema_mode": "json_object",
+   "reasoning_effort": "none",
+   "temperature": 0.2,
+   "max_tokens": 32000,
+   "thinking": "off, reasoning_effort=none",
+   "offpeak_only": false,
+   "peak_utc": [
+    [
+     1,
+     4
+    ],
+    [
+     6,
+     10
+    ]
+   ],
+   "price": {
+    "input": 0.15,
+    "cached": 0.003,
+    "output": 0.6
+   },
+   "price_note": "off-peak rates; runs pause during peak",
+   "time": "24:00:00"
+  },
+  "qwen3.8-27b": {
+   "kind": "vllm",
+   "model_dir": "models/Qwen3.8-27B",
+   "think_effort": "medium",
+   "max_tokens": 6000,
+   "gpus": 2,
+   "venv": "~/venvs/vllm",
+   "serve": "legacy",
+   "vllm_extra": "--gdn-prefill-backend triton --reasoning-parser qwen3 --tensor-parallel-size 2 --speculative-config {\"method\":\"mtp\",\"num_speculative_tokens\":2}",
+   "thinking": "on, medium",
+   "time": "24:00:00"
+  }
+ }
+}
