@@ -31,7 +31,7 @@ Every command below was run as written, on an environment built from `environmen
 Python 3.10.
 
 ```bash
-git clone <this repository> OpenSocialJax && cd OpenSocialJax
+git clone https://github.com/cooperativex/OpenSocialJax.git && cd OpenSocialJax
 conda env create -f environment.yml      # creates the env "OpenSocialJax" and installs the package into it
 conda activate OpenSocialJax
 python -m pytest tests -q                # 31 tests, a few minutes on a CPU
