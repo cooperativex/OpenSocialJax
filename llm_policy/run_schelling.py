@@ -22,6 +22,7 @@ import argparse, json, os, statistics as st, subprocess, sys, time
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = [f"--account={os.environ['SLURM_ACCOUNT']}"] if os.environ.get("SLURM_ACCOUNT") else []   # sbatch account, if your queue needs one
 sys.path.insert(0, REPO)
+from llm_policy import jax_defaults; jax_defaults.apply()      # CPU JAX for the harness, before JAX is imported
 from llm_policy.run_experiment import MAX_FAILS, RecordingProvider, cost_of, harness_args, harvest_args, load_config, make_inner_provider, wait_offpeak
 from llm_policy.run_arena import progress_writer
 
@@ -179,7 +180,7 @@ def submit(exp):
             print(f"{job}: failed {MAX_FAILS} times in a row, NOT resubmitted -- see {fails} and run.log"); continue
         cmd = ["sbatch", *ACCOUNT, f"--job-name={job}", "--time=24:00:00", f"--output={REPO}/logs/sbatch_%x_%j.out",
                "--cpus-per-task=8", "--mem=32G", os.path.join(REPO, "scripts/slurm/schelling_run.sh"), os.path.abspath(exp), str(k), str(s)]
-        out = subprocess.run(cmd, capture_output=True, text=True)
+        out = subprocess.run(cmd, capture_output=True, text=True, env={**os.environ, "OSJ_REPO": REPO})   # the launcher cds there
         print(f"{job}: {(out.stdout or out.stderr).strip()}")
 
 

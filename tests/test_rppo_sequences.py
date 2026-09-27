@@ -10,8 +10,7 @@ Two things in RPPO fail silently rather than loudly, so they get tests:
    reason the recurrent policy exists.
 
 Run:
-  export PYTHONPATH=$PWD:$PYTHONPATH
-  JAX_PLATFORMS=cpu python tests/test_rppo_sequences.py
+  python tests/test_rppo_sequences.py
 """
 
 import sys
@@ -22,6 +21,12 @@ import numpy as onp
 
 from algorithms.RPPO.rppo_cnn_open_cleanup import split_sequence_minibatches
 from algorithms.utils.networks import ActorCriticRNN, ScannedRNN
+
+# A toy observation layout: (kind, colour, agent-feature, held-tool) channel
+# counts, the same structure open_cleanup lays its observation out in, but
+# small. The network only needs the channel total to match.
+LAYOUT = (4, 3, 2, 1)
+OBS_CHANNELS = sum(LAYOUT)
 
 
 def test_minibatches_keep_each_actor_sequence_whole():
@@ -69,7 +74,7 @@ def test_replaying_a_split_rollout_matches_the_unsplit_one():
     """Replaying the minibatches through the GRU must reproduce exactly what a
     single pass over the full rollout produces — this is what makes the PPO
     update consistent with the data collection."""
-    T, actors, n_mb, hidden, obs_dim = 5, 8, 2, 16, (5, 5, 3)
+    T, actors, n_mb, hidden, obs_dim = 5, 8, 2, 16, (5, 5, OBS_CHANNELS)
     per_mb = actors // n_mb
 
     key = jax.random.PRNGKey(1)
@@ -79,7 +84,7 @@ def test_replaying_a_split_rollout_matches_the_unsplit_one():
     prev_r = jnp.zeros((T, actors))
     resets = jnp.zeros((T, actors), dtype=bool)
 
-    net = ActorCriticRNN(action_dim=4, hidden_size=hidden)
+    net = ActorCriticRNN(action_dim=4, hidden_size=hidden, obs_layout=LAYOUT)
     hstate = ScannedRNN.initialize_carry(actors, hidden)
     params = net.init(k_init, hstate, (obs, prev_a, prev_r, resets))
     _, _, value_full = net.apply(params, hstate, (obs, prev_a, prev_r, resets))
@@ -107,9 +112,9 @@ def test_replaying_a_split_rollout_matches_the_unsplit_one():
 def test_memory_persists_between_resets():
     """Memory must survive a step without a reset and vanish with one."""
     T, B, hidden = 4, 2, 8
-    net = ActorCriticRNN(action_dim=4, hidden_size=hidden)
+    net = ActorCriticRNN(action_dim=4, hidden_size=hidden, obs_layout=LAYOUT)
     h0 = ScannedRNN.initialize_carry(B, hidden)
-    obs = jnp.ones((T, B, 5, 5, 3))
+    obs = jnp.ones((T, B, 5, 5, OBS_CHANNELS))
     pa = jnp.zeros((T, B), dtype=jnp.int32)
     pr = jnp.zeros((T, B))
     params = net.init(jax.random.PRNGKey(0), h0,

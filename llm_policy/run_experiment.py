@@ -30,6 +30,8 @@ from __future__ import annotations
 import argparse, collections, hashlib, json, os, subprocess, sys, time, types
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO)
+from llm_policy import jax_defaults; jax_defaults.apply()      # CPU JAX for the harness, before JAX is imported
 ACCOUNT = [f"--account={os.environ['SLURM_ACCOUNT']}"] if os.environ.get("SLURM_ACCOUNT") else []   # sbatch account, if your queue needs one
 
 
@@ -181,7 +183,8 @@ class RecordingProvider:
             rec = self.replay.popleft()
             if rec["h"] != h:
                 raise ReplayDivergence(f"{self.path}: recorded call {self.n_replayed} answered a different prompt; "
-                                       "the harness or the setting changed since this run started")
+                                       "the prompt or the setting changed since this run started. Put it back to resume "
+                                       f"the run, or delete {os.path.dirname(self.path)} to start it over")
             self.n_replayed += 1
             self.last_reasoning, self.last_tokens = rec.get("reasoning", ""), rec.get("tokens", 0)
             self.last_seconds, self.last_reasoning_tokens = rec.get("seconds", 0.0), rec.get("reasoning_tokens", 0)
@@ -394,7 +397,7 @@ def submit(exp, model, seeds=None):
         cmd = ["sbatch", *ACCOUNT, f"--job-name={job}", f"--time={spec.get('time', '24:00:00')}",
                f"--output={REPO}/logs/sbatch_%x_%j.out", *res,
                os.path.join(REPO, "scripts/slurm/exp_run.sh"), os.path.abspath(exp), model, str(s)]
-        out = subprocess.run(cmd, capture_output=True, text=True)
+        out = subprocess.run(cmd, capture_output=True, text=True, env={**os.environ, "OSJ_REPO": REPO})   # the launcher cds there
         print(f"{job}: {(out.stdout or out.stderr).strip()}")
 
 

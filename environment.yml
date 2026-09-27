@@ -12,7 +12,7 @@ dependencies:
 
   - pip
   - pip:
-    # JAX 0.6.2 with CUDA 12 wheels — bundles CUDA via pip; no cudatoolkit needed.
+    # JAX 0.6.2 with CUDA 12 wheels (CUDA comes with the wheels; no cudatoolkit needed). A machine without a GPU runs on the CPU.
     - "jax[cuda12]==0.6.2"
     - gymnax==0.0.8
     # flax 0.10.7 is not on conda-forge for aarch64; install via pip.
@@ -22,3 +22,5 @@ dependencies:
     - pillow==11.1.0    # used by algorithms.utils.eval_utils (gif rendering)
     - openai>=1.60      # llm_policy: OpenAI-compatible endpoints
     - anthropic>=0.40   # llm_policy: the Anthropic API
+    - pytest>=8         # tests/
+    - -e .            # this repository, importable from anywhere

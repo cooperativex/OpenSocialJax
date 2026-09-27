@@ -1,15 +1,13 @@
-"""Standalone rendering checks for all environments (no pytest).
+"""Rendering checks for both environments.
 
-Covers: render output type/shape stability, PIL compatibility, the
-territory claimed-resource color regression (render used to crash once any
-resource was claimed), the "agents never vanish from the grid" invariant
-(beams must not overwrite agent stamps), warm-cache render speed, and
-tile_cache instance isolation.
+Covers: render output type/shape stability, PIL compatibility, the "agents
+never vanish from the grid" invariant (beams must not overwrite agent
+stamps), warm-cache render speed, the river background under an agent in
+OpenCleanup, and tile_cache instance isolation.
 
 Run:
-  ulimit -c 0; ulimit -u $(ulimit -Hu)
-  export PYTHONPATH=$PWD:$PYTHONPATH
-  JAX_PLATFORMS=cpu python tests/test_render.py
+  python -m pytest tests/test_render.py -q
+  python tests/test_render.py          # the same checks, no pytest
 """
 
 import sys
@@ -17,6 +15,7 @@ import time
 
 import jax
 import numpy as onp
+import pytest
 from PIL import Image
 
 import opensocialjax
@@ -24,8 +23,8 @@ from opensocialjax.registration import REGISTERED_ENVS
 
 STEPS = 30
 WARM_TIMING_REPS = 5
-# generous bound for a loaded login node; the old render was 0.14-0.34 s/f
-MAX_WARM_SECONDS = 0.15
+# generous bound for a loaded machine; a warm render takes a few ms per frame
+MAX_WARM_SECONDS = 0.5
 
 
 def env_module(env):
@@ -46,18 +45,10 @@ def check_frame(env_id, step, img, expected_shape):
 def run_env(env_id):
     env = opensocialjax.make(env_id)
     mod = env_module(env)
-    Actions = getattr(mod, "Actions", None)
-    Items = getattr(mod, "Items", None)
-
-    zap_actions = []
-    if Actions is not None:
-        zap_actions = [a.value for a in Actions
-                       if "zap" in a.name or "claim" in a.name or "clean" in a.name]
-
-    has_grid_stamps = Items is not None and hasattr(env, "_agents") \
-        and hasattr(env.reset(jax.random.PRNGKey(0))[1], "grid") \
-        and env_id not in ("coop_mining", "lb_foraging")
-    agent_codes = onp.asarray(env._agents) if has_grid_stamps else None
+    Actions = mod.Actions
+    # force beams so the agent-visibility invariant is exercised
+    zap_actions = [a.value for a in Actions if "zap" in a.name]
+    agent_codes = onp.asarray(env._agents)
 
     key = jax.random.PRNGKey(0)
     key, kr = jax.random.split(key)
@@ -65,12 +56,10 @@ def run_env(env_id):
     step_fn = jax.jit(env.step)
 
     shape = check_frame(env_id, -1, env.render(state), None)
-    saw_claim = False
 
     for t in range(STEPS):
         key, ka, ks = jax.random.split(key, 3)
-        if zap_actions and t % 2 == 1:
-            # force beams so the agent-visibility invariant is exercised
+        if t % 2 == 1:
             actions = [zap_actions[t // 2 % len(zap_actions)]] * env.num_agents
         else:
             actions = [env.action_space(a).sample(jax.random.fold_in(ka, i))
@@ -80,18 +69,11 @@ def run_env(env_id):
         img = env.render(state)
         check_frame(env_id, t, img, shape)
 
-        if has_grid_stamps:
-            grid = onp.asarray(state.grid)
-            if (grid >= 1000).any():
-                saw_claim = True
-            for code in agent_codes:
-                assert (grid == code).any(), (
-                    f"{env_id} step {t}: agent code {code} missing from grid "
-                    f"(agent vanished from rendering)")
-
-    if env_id == "territory_open":
-        assert saw_claim, ("territory rollout never claimed a resource; "
-                           "claim-color regression not exercised — raise STEPS")
+        grid = onp.asarray(state.grid)
+        for code in agent_codes:
+            assert (grid == code).any(), (
+                f"{env_id} step {t}: agent code {code} missing from grid "
+                f"(agent vanished from rendering)")
 
     # warm-cache timing
     t0 = time.perf_counter()
@@ -102,17 +84,22 @@ def run_env(env_id):
     print(f"ok: {env_id} ({env.num_agents} agents, warm render {warm*1000:.1f} ms/frame)")
 
 
-def test_cleanup_river_background():
-    """Agent standing in the cleanup river must be drawn on water, not on
-    the default sand background (regression: the agent grid stamp destroys
-    the terrain value, so render must recover it from self.RIVER)."""
-    from opensocialjax.environments.cleanup.clean_up import Items
+@pytest.mark.parametrize("env_id", REGISTERED_ENVS)
+def test_render_rollout(env_id):
+    run_env(env_id)
 
-    env = opensocialjax.make("clean_up")
+
+def test_cleanup_river_background():
+    """An agent standing in the river must be drawn on water, not on the
+    default background (regression: the agent grid stamp destroys the terrain
+    value, so render must recover it from the layout)."""
+    from opensocialjax.environments.open_cleanup.open_cleanup import Items
+
+    env = opensocialjax.make("open_cleanup")
     _, state = env.reset(jax.random.PRNGKey(0))
 
-    # Move agent 0 onto the first river cell and restamp the grid.
-    r, c = (int(v) for v in onp.asarray(env.RIVER)[0])
+    # Move agent 0 onto a river cell and restamp the grid.
+    r, c = sorted(env.layout_arrays(state)["river_set"])[0]
     old = onp.asarray(state.agent_locs)[0]
     code = int(onp.asarray(env._agents)[0])
     grid = state.grid.at[int(old[0]), int(old[1])].set(0).at[r, c].set(code)
@@ -121,27 +108,28 @@ def test_cleanup_river_background():
 
     img = env.render(state)
     d = int(onp.asarray(locs)[0, 2])
-    # tile (r, c) after pad/crop (image matches ASCII orientation, no rot)
+    # tile (r, c) after pad/crop (the image has the map's orientation)
     region = img[(r + 1) * 32:(r + 2) * 32,
                  (c + 1) * 32:(c + 2) * 32]
 
-    def tile(terrain):
+    def tile(terrain, highlight):
         # blit truncates float (highlighted) tiles to uint8; mirror that
         t = env.render_tile(code, agent_dir=d, agent_hat=False,
-                            highlight=True, tile_size=32, terrain=terrain)
+                            highlight=highlight, tile_size=32, terrain=terrain)
         return t.astype(onp.uint8)
 
-    assert onp.array_equal(region, tile(int(Items.river))), \
-        "agent-in-river tile does not use the river background"
-    assert not onp.array_equal(region, tile(None)), \
-        "agent-in-river tile still matches the sand background"
+    on_river = [hl for hl in (True, False)
+                if onp.array_equal(region, tile(int(Items.river), hl))]
+    assert on_river, "agent-in-river tile does not use the river background"
+    assert not onp.array_equal(region, tile(None, on_river[0])), \
+        "agent-in-river tile still matches the default background"
     print("ok: cleanup river background under agent")
 
 
 def test_tile_cache_isolation():
-    from opensocialjax.environments.common_harvest.harvest_open import Harvest_open
-    e1 = Harvest_open(num_agents=7)
-    e2 = Harvest_open(num_agents=3)
+    from opensocialjax.environments.open_harvest.open_harvest import OpenHarvest
+    e1 = OpenHarvest(num_agents=5)
+    e2 = OpenHarvest(num_agents=3)
     assert e1.tile_cache is not e2.tile_cache, "tile_cache shared across instances"
     key = jax.random.PRNGKey(0)
     _, s1 = e1.reset(key)

@@ -9,9 +9,9 @@
 
 *Two sequential social dilemmas with hidden rules to discover, in JAX, and a harness for LLM agents to play them.*
 
-OpenSocialJax extends [SocialJax](https://github.com/cooperativex/SocialJax) (ICLR 2026) with two environments in
-which the agents must work out how the world works while the social dilemma is in force, and with everything needed
-to run language models as agents in them:
+OpenSocialJax extends [SocialJax](https://github.com/cooperativex/SocialJax) (ICLR 2026) with two environments in which the
+agents must work out how the world works while the social dilemma is in force, and with everything needed to run
+language models as agents in them:
 
 - **OpenCleanup** and **OpenHarvest** — Clean Up and Commons Harvest, each with a latent configuration (a hidden
   rule set, a map, colours) sampled per meta-episode from held-out splits.
@@ -23,6 +23,180 @@ to run language models as agents in them:
 <p align="center">
   <img src="docs/figures/env_mosaic.png" alt="OpenCleanup (top) and OpenHarvest (bottom) on different held-out maps, five agents each" width="100%">
 </p>
+
+Every command below was run as written, on an environment built from `environment.yml`, on a CPU node.
+
+## 1. Install
+
+Python 3.10.
+
+```bash
+git clone <this repository> OpenSocialJax && cd OpenSocialJax
+conda env create -f environment.yml      # creates the env "OpenSocialJax" and installs the package into it
+conda activate OpenSocialJax
+python -m pytest tests -q                # 31 tests, a few minutes on a CPU
+```
+
+Without conda: `pip install -r requirements.txt -e .` in a Python 3.10 environment. The JAX wheels are the CUDA 12
+build; a machine without a GPU runs everything on the CPU (the tests and the harness are quiet about it, a plain
+`import jax` reports the missing CUDA device once).
+
+## 2. Step an environment
+
+```python
+import jax, numpy as np
+from PIL import Image
+from opensocialjax.environments.held_out import held_out_env, held_out_harvest_env
+
+env = held_out_harvest_env(num_agents=5, num_inner_steps=300, num_outer_steps=5)   # OpenHarvest, held-out rules
+# env = held_out_env(num_agents=5)                                                  # OpenCleanup
+key = jax.random.PRNGKey(0)
+obs, state = env.reset(key)                       # obs[i]: agent i's 11 x 11 egocentric window, one channel per item
+for t in range(20):
+    key, k = jax.random.split(key)
+    actions = [env.action_space(i).sample(jax.random.fold_in(k, i)) for i in range(env.num_agents)]
+    obs, state, reward, done, info = env.step(k, state, actions)      # reward[i]: agent i's own reward this step
+Image.fromarray(np.asarray(env.render(state)).astype(np.uint8)).save("open_harvest.png")
+```
+
+The interface follows [JaxMARL](https://github.com/FLAIROx/JaxMARL/): `reset` and `step` are jitted and return
+per-agent dictionaries. `num_inner_steps` is the length of a trial, `num_outer_steps` the number of trials in a
+meta-episode; the environment re-lays the world at every trial boundary and `done["__all__"]` turns true after the
+last trial. Actions: 0–3 move north / south / east / west, 4–5 turn, 6 zap (OpenHarvest) or fire (OpenCleanup),
+7 stay, and 8 pick up in OpenCleanup. `held_out_*` draws the hidden rules from the held-out split of the rule
+benchmark; `opensocialjax.make("open_harvest", ...)` / `make("open_cleanup", ...)` are the raw constructors.
+
+Both environments are pure JAX, so many copies step in lockstep under `jax.vmap`; the speed test measures that with
+random actions on the default device (the GPU when there is one):
+
+```bash
+python speed_test/speed_test_random.py                      # both environments, 1 / 128 / 1024 parallel copies
+python speed_test/speed_test_random.py --env open_harvest --num-envs 4096
+```
+
+On one Hopper-class GPU, 4096 copies step at about 7 million environment steps per second in OpenCleanup and
+11 million in OpenHarvest (five agents each; compilation excluded).
+
+## 3. Run LLM agents
+
+### A two-minute run, no model needed
+
+`experiments/demo` is a two-trial, 40-step OpenCleanup experiment. Its `scripted` model is a fixed policy (walk, pick
+up, fire), so the whole pipeline runs without any API key:
+
+```bash
+python llm_policy/run_experiment.py --exp experiments/demo --model scripted --seed 906
+```
+
+```
+[scripted seed 906] start; recorded replies per agent [0, 0, 0, 0, 0] -> replaying those, then live
+[scripted seed 906] DONE team apples/trial [0, 0] | cost $None | 405 calls
+```
+
+About 20 seconds. The scripted policy never works out the recipe, so it eats nothing; the point is the plumbing. The
+run is in `experiments/demo/runs/scripted/seed906/`: `calls_agent<i>.jsonl` (every reply of agent *i*),
+`decisions.jsonl` (the prompt, reply and outcome of every step), `system.txt`, `result.json` (scores, token usage,
+cost) and `DONE`.
+
+```bash
+python llm_policy/run_experiment.py --exp experiments/demo --status               # where every run stands
+python scripts/render_run.py experiments/demo/runs/scripted/seed906 --trials 1,2  # one GIF per trial, in <run>/gifs/
+```
+
+**Runs resume.** Interrupt a run (Ctrl-C, a lost connection, a job limit) and start the same command again: the
+recorded replies are replayed without a model call, which rebuilds the world, the ledgers and the notebooks exactly,
+and the run carries on live from the first unrecorded step. The first line then reads
+`recorded replies per agent [n, n, n, n, n]`.
+
+### With a language model
+
+A model is an entry under `"models"` in the experiment's `config.json`; `experiments/demo` already declares
+`gpt-6-luna` (an OpenAI-compatible endpoint, key read from `~/.config/openai/key`). Put your key in that file and run:
+
+```bash
+mkdir -p ~/.config/openai && echo "sk-..." > ~/.config/openai/key && chmod 600 ~/.config/openai/key
+python llm_policy/run_experiment.py --exp experiments/demo --model gpt-6-luna --seed 906
+```
+
+The demo's 405 calls took about ten minutes and cost $0.17 with gpt-6-luna (the five agents are queried in parallel).
+In two 40-step trials the team cleared 20 waste cells and ate no apples: the river takes longer than that to clean,
+which is why the paper's trials are 400 steps. Every step each agent replies with one JSON object — why, a mode,
+a goal, one notebook edit, the action; agent A at step 5 of the first trial:
+
+```json
+{
+  "why_this_move": "I am standing on T1 with window [2]; picking up tool 1 tests the ordered pair [2,1], which may make a working tool. I have not seen waste yet, so I will explore this combination before heading to the river.",
+  "mode": "explore",
+  "goal": {
+    "type": "pick_up",
+    "cell": [7, 10],
+    "why": "test the pick-up order [2,1]"
+  },
+  "note": {
+    "op": "none",
+    "id": 0,
+    "text": ""
+  },
+  "action": 8
+}
+```
+
+To use another model, copy the entry and change the fields: `kind: api` for any OpenAI-compatible endpoint,
+`kind: anthropic` for the Anthropic API, `kind: vllm` for a local open-weight model served with vLLM. Every key is
+described in [docs/configuration.md](docs/configuration.md).
+
+### On a SLURM cluster
+
+One job per unfinished (model, seed), and a watchdog that resubmits until everything is `DONE`; for `kind: vllm`
+models the job starts the vLLM server first.
+
+```bash
+export SLURM_ACCOUNT=<account>      # if your queue needs one; CONDA_SH / CONDA_ENV if conda is not in ~/miniconda3
+python llm_policy/run_experiment.py --exp experiments/demo --model gpt-6-luna --submit
+python llm_policy/run_experiment.py --exp experiments/demo --watch
+```
+
+## 4. Reproduce the paper's experiments
+
+The eight folders under `experiments/` are the paper's settings, including every model's decoding spec. Seeds 906,
+907 and 908 fix the map, the hidden rules and the colours, so every model faces the same three problems. `runs/` are
+not shipped.
+
+| experiment | runner | what it is |
+|---|---|---|
+| `open_cleanup_5ag`, `open_harvest_5ag` | `run_experiment.py` | homogeneous populations: five copies of one model, 8 models × 3 seeds |
+| `open_cleanup_arena`, `open_harvest_arena` | `run_arena.py` | five different models in one population, seating rotated per seed |
+| `open_cleanup_schelling`, `open_harvest_schelling` | `run_schelling.py` | gpt-6-luna in every seat, *k* = 0…5 of them prompted as cooperators, the rest as defectors |
+| `open_cleanup_reveal`, `open_harvest_reveal` | `run_experiment.py` | the hidden rules given to every agent at the start, first trial only |
+
+```bash
+# homogeneous populations: one run per (model, seed); each model needs its key file (or GPUs for vLLM models)
+python llm_policy/run_experiment.py --exp experiments/open_harvest_5ag --model gpt-6-luna --seed 906
+python llm_policy/run_experiment.py --exp experiments/open_harvest_5ag --model gpt-6-luna --submit    # all seeds as jobs
+python llm_policy/run_experiment.py --exp experiments/open_harvest_5ag --status
+
+# arena and Schelling
+python llm_policy/run_arena.py     --exp experiments/open_harvest_arena     --seed 906
+python llm_policy/run_schelling.py --exp experiments/open_harvest_schelling --k 3 --seed 906
+python llm_policy/run_schelling.py --exp experiments/open_harvest_schelling --submit                  # all 18 runs
+```
+
+One OpenCleanup seed is 5 trials × 400 steps × 5 agents, about 10k calls: in the paper's runs it cost about $4 with
+gpt-6-luna, $7 with GLM-5.3-Flash, $70 with gpt-6-sol and $220 with Claude Opus 5.5; an OpenHarvest seed is roughly a
+quarter of that, since a trial ends once the orchard is dead. Local models (Qwen3.8-27B, Gemma 4 31B, Qwen3.5-4B)
+need 1–2 GPUs: put the weights at `models/<name>` and vLLM in the venv the spec names.
+
+## 5. Your own experiment
+
+```bash
+cp -r experiments/open_harvest_5ag experiments/my_harvest      # then edit experiments/my_harvest/config.json
+```
+
+Change `setting.seeds` (a new seed draws a new map, rule set and colours), `setting.inner` / `outer`, and keep only
+the `models` you have keys for. `setting.reveal_rules: true` (OpenHarvest) or `reveal_orders: true` (OpenCleanup)
+gives every agent the hidden rules; `stop_after_trials: 1` ends runs after the first trial. For a population of
+different models start from `open_harvest_arena` (edit `roster`); for cooperator / defector roles start from
+`open_harvest_schelling` (edit `model`, `compositions`). Run it exactly like the shipped ones.
 
 ## The environments
 
@@ -42,175 +216,21 @@ when harvested at each stage (an order of ×2 / ×1 / ×0.5) are hidden, one of 
 regrows only while apples still hang near it, so restraint preserves a common pool that any agent can deplete.
 
 In both, a meta-episode is several trials on one configuration: the map, the rules and the colours stay fixed, the
-world is re-laid at every trial, and the agents keep what they learned. Rewards are individual. Rule spaces are
-enumerated in [`discovery_rules.py`](opensocialjax/environments/discovery_rules.py), split into train / held-out
-benchmarks in [`rule_benchmark.py`](opensocialjax/environments/rule_benchmark.py), and served by
-[`held_out.py`](opensocialjax/environments/held_out.py); maps come from the pools in each environment's `layouts*.py`.
-
-## Installation
-
-Python 3.10. Everything runs from the repository root with the root on `PYTHONPATH`.
-
-```bash
-git clone https://github.com/cooperativex/OpenSocialJax.git
-cd OpenSocialJax
-conda env create -f environment.yml          # or: conda create -n OpenSocialJax python=3.10 && pip install -r requirements.txt
-conda activate OpenSocialJax
-export PYTHONPATH=$PWD:$PYTHONPATH
-python -m pytest tests -q                    # environment tests (CPU is fine: JAX_PLATFORMS=cpu)
-```
-
-`requirements.txt` pins JAX 0.6.2 with CUDA 12 wheels; on a CPU-only machine install `jax==0.6.2` instead.
-
-## Using the environments
-
-The interface follows [JaxMARL](https://github.com/FLAIROx/JaxMARL/) (PettingZoo / Gymnax style): `reset(key)` and
-`step(key, state, actions)` are jitted and return per-agent dictionaries.
-
-```python
-import jax
-import opensocialjax
-from opensocialjax.environments.held_out import held_out_env, held_out_harvest_env
-
-env = held_out_env(num_agents=5)               # OpenCleanup: rules from the held-out split, river fully polluted at the start
-env = held_out_harvest_env(num_agents=5)       # OpenHarvest
-env = opensocialjax.make("open_harvest", num_agents=5, num_inner_steps=300, num_outer_steps=5)   # the raw constructor
-
-key = jax.random.PRNGKey(0)
-obs, state = env.reset(key)
-actions = [env.action_space(i).sample(jax.random.fold_in(key, i)) for i in range(env.num_agents)]
-obs, state, reward, done, info = env.step(key, state, actions)
-```
-
-`num_inner_steps` is the length of a trial and `num_outer_steps` the number of trials in a meta-episode. The
-constructors' docstrings list the rest (rule pools, map pools, ripening and regrowth parameters, the zap freeze).
-
-## LLM agents
-
-[`llm_policy/`](llm_policy) plays both environments with language models. Each agent is an independent model
-instance. Every step it receives a text observation — an egocentric 11 × 11 window, the legal actions, a ledger of
-what the environment's own feedback proved to it, and a notebook it edits itself — and replies with one JSON object.
-The prompt states the rules of the world, never the hidden rule set and never tactics; agents cannot communicate and
-are not told which model controls the others. How the observation is built, what the ledger and the notebook hold,
-and what a run writes are described in [`llm_policy/README.md`](llm_policy/README.md).
-
-### Configuring an experiment
-
-An experiment is a folder under `experiments/` with a `config.json`. The eight folders shipped here are the
-settings of the paper; copy one to start your own. A config has three parts:
-
-```json
-{
-  "name": "open_harvest_5ag",
-  "game": "harvest",
-  "setting": { ... },          // the environment and the protocol, shared by every model
-  "models":  { ... }           // one entry per model: how to call it and how it decodes
-}
-```
-
-**`setting`** (`game` is `"cleanup"` or `"harvest"`):
-
-| key | meaning |
-|---|---|
-| `agents`, `inner`, `outer` | agents per population, steps per trial, trials per meta-episode (400 × 5 for OpenCleanup, 300 × 5 for OpenHarvest in the paper) |
-| `seeds` | the problems: a seed fixes the map, the hidden rules and the colours, so every model faces the same ones |
-| `history` | how many recent steps the observation shows (15) |
-| `max_tokens` | default reply budget; a model's own `max_tokens` overrides it |
-| `reward` | must be `"individual"`; a config that says `"common"` is refused |
-| OpenCleanup: `random_layout`, `skew`, `spawn`, `tools` | a held-out map per seed; one waste hue per meta-episode (`skew: 1.0`); waste re-appearance probability; `"shared"` tool structure |
-| OpenHarvest: `pool`, `respawn_wait`, `ripen_range`, `rot_range`, `rates`, `early_stop` | the map pool (`"orig6"`); steps a zapped agent is frozen; steps per ripeness stage; regrowth delay of a rotted cell; the regrowth multipliers; fast-forward once the orchard is dead |
-| `reveal_orders` (OpenCleanup) / `reveal_rules`, `reveal_regrowth` (OpenHarvest) | the rule-reveal ablation: hand every agent the hidden rules at the start |
-| `stop_after_trials` | end every run after its first *k* trials while keeping the prompt of the full run |
-
-**`models`**: every entry has a `kind` and the keys of that kind, plus optional keys any kind accepts.
-
-```json
-"gpt-6-luna": {
-  "kind": "api", "model": "gpt-6-luna",
-  "base_url": "https://api.openai.com/v1", "key_file": "~/.config/openai/key",
-  "schema_mode": "json_schema", "token_param": "max_completion_tokens", "max_tokens": 32000,
-  "price": {"input": 0.25, "cached": 0.025, "output": 2.0}
-},
-"claude-opus-5.5": {
-  "kind": "anthropic", "model": "claude-opus-5-5", "key_file": "~/.config/anthropic/key",
-  "effort": "medium", "max_tokens": 16000,
-  "price": {"input": 4.0, "cached": 0.2, "output": 20.0, "cache_write": 5.0, "input_includes_cached": false}
-},
-"deepseek-v4.1-flash-nothink": {
-  "kind": "api", "model": "deepseek-flash", "base_url": "https://api.deepseek.com/v1", "key_file": "~/.config/deepseek/key",
-  "schema_mode": "json_object", "reasoning_effort": "none", "temperature": 0.2, "max_tokens": 32000,
-  "offpeak_only": true, "peak_utc": [[1, 4], [6, 10]]
-},
-"qwen3.8-27b": {
-  "kind": "vllm", "model_dir": "models/Qwen3.8-27B", "venv": "~/venvs/vllm", "gpus": 2, "serve": "legacy",
-  "vllm_extra": "--reasoning-parser qwen3 --tensor-parallel-size 2",
-  "think_effort": "medium", "temperature": 0.2, "max_tokens": 6000
-}
-```
-
-| `kind` | keys | notes |
-|---|---|---|
-| `api` — any OpenAI-compatible chat endpoint | `model`, `base_url`, `key_file`; `schema_mode` (`json_schema` = strict structured output, `json_object`, or `none` when the endpoint supports neither); `token_param` (`max_tokens`, or `max_completion_tokens` for OpenAI reasoning models); `reasoning_effort`; `temperature`; `extra_body` | reasoning models take no `temperature`; leave it out to use the provider's default |
-| `anthropic` — the Anthropic API | `model`, `key_file`, `effort` (`low` / `medium` / `high`) | replies are parsed as JSON without structured output |
-| `vllm` — a local open-weight model | `model_dir`, `venv` (the Python environment with vLLM), `gpus`, `serve` (`legacy`, or `open` for a vLLM 0.29 build that needs the cache variables), `vllm_extra` (extra `vllm serve` flags: reasoning parser, tensor parallelism, speculative decoding, ...); `think_effort` (models with effort levels), `think_budget` (a hard cap on thinking tokens for models without them; the harness closes the think block and asks for the answer), `temperature`, `sampling` (any extra sampling parameters, e.g. `{"top_p": 0.95, "top_k": 20, "presence_penalty": 1.5}`) | the SLURM launcher starts the server; to use one you started yourself, pass `--base-url http://host:port/v1` to the runner |
-| `scripted` | — | a fixed policy, for smoke tests without any model |
-
-Optional keys for any kind: `max_tokens` (this model's reply budget), `price` (dollars per million tokens: `input`,
-`cached`, `output`, `cache_write`; set `input_includes_cached: false` when the provider reports cached tokens
-separately — the cost lands in `result.json`), `seeds` (this model's own seed list, e.g. `[906, 907, "906r1"]`: the
-replicate `906r1` replays seed 906's problem under other run randomness), `time` (SLURM wall time), `paused`
-(hold a model: `--submit` and `--watch` skip it), `offpeak_only` + `peak_utc` (pause live calls in the provider's
-peak-price hours), and free-text notes such as `thinking` for the record.
-
-Keys are plain text files; a `key_file` holds one key and nothing else. Nothing in the repository reads keys from
-the environment.
-
-### Running
-
-```bash
-# one (model, seed) here; interrupted runs resume from their recorded replies
-python llm_policy/run_experiment.py --exp experiments/open_harvest_5ag --model gpt-6-luna --seed 906
-python llm_policy/run_experiment.py --exp experiments/open_harvest_5ag --status
-
-# on SLURM: one job per unfinished (model, seed), and a watchdog that resubmits until every run is DONE
-export SLURM_ACCOUNT=<account>            # if your queue needs one; CONDA_SH / CONDA_ENV if conda lives elsewhere
-python llm_policy/run_experiment.py --exp experiments/open_harvest_5ag --model qwen3.8-27b --submit
-python llm_policy/run_experiment.py --exp experiments/open_harvest_5ag --watch
-```
-
-A run is written to `experiments/<exp>/runs/<model>/seed<k>/`: `calls_agent<i>.jsonl` (every reply, as it arrives),
-`decisions.jsonl` (prompt, reply and outcome of every step), `progress.json`, `result.json` (scores per trial and per
-agent, notebook statistics, token usage, cost) and `DONE`. `runs/` is not tracked.
-
-**Protocols.** The same config format drives three runners:
-
-| runner | experiment folders | what it does |
-|---|---|---|
-| `run_experiment.py` | `open_cleanup_5ag`, `open_harvest_5ag`, `open_cleanup_reveal`, `open_harvest_reveal` | homogeneous populations: every seat is the same model, one run per (model, seed); the `*_reveal` configs add `reveal_*` and `stop_after_trials` |
-| `run_arena.py` | `open_cleanup_arena`, `open_harvest_arena` | `roster`: five models in one population, one per seat, seating rotated per seed; tokens and cost booked per model |
-| `run_schelling.py` | `open_cleanup_schelling`, `open_harvest_schelling` | one model (`model`) in every seat; for each *k* in `compositions`, *k* agents are prompted as cooperators and the rest as defectors (`ROLES` in the prompt modules) |
-
-```bash
-python llm_policy/run_arena.py     --exp experiments/open_harvest_arena     --seed 906     # or --submit / --status / --watch
-python llm_policy/run_schelling.py --exp experiments/open_harvest_schelling --k 3 --seed 906
-```
-
-### Analysis
-
-[`scripts/`](scripts) turns finished runs into the paper's tables and figures: `summarize_open_cleanup.py` and
-`summarize_open_harvest.py` (per-model tables), `open_harvest_bounds.py <seed>` (the scripted greedy and oracle
-references a seed's score is placed between), `make_results_figures.py`, `make_schelling_figures.py --trials 5` and
-`open_harvest_notes_timeline.py`. See [`scripts/README.md`](scripts/README.md).
+world is re-laid at every trial, and the agents keep what they learned. Rewards are individual. Each LLM agent sees
+an egocentric 11 × 11 window, the legal actions, a ledger of what the environment's own feedback proved to it, and a
+notebook it edits itself; the prompt states the rules of the world, never the hidden rule set and never tactics, and
+agents cannot communicate.
 
 ## Repository layout
 
 ```
-opensocialjax/          the two environments, the rule spaces and their held-out splits, JaxMARL-style wrappers
-llm_policy/             the LLM-agent harness: prompts, policies, providers, the three runners
-experiments/            the experiment configs of the paper (and OpenHarvest's scripted reference bounds)
-scripts/                analysis and figure scripts; scripts/slurm/ launchers for API and vLLM runs
-tests/                  environment tests, and the scripted OpenHarvest policies used as references
-docs/                   the figures used here
+opensocialjax/     the two environments, the rule spaces and their held-out splits (held_out.py), wrappers
+llm_policy/        the LLM-agent harness: prompts, policies, providers, the three runners
+experiments/       the paper's experiment configs and the demo
+scripts/           render_run.py (a finished run to GIFs); scripts/slurm/ launchers for API and vLLM runs
+tests/             environment tests, and the scripted OpenHarvest policies used as references
+speed_test/        random-action throughput of the environments
+docs/              configuration.md and the figures above
 ```
 
 ## Citation

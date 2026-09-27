@@ -314,7 +314,7 @@ def make_train(config):
                     
                 # else:
                 #     batch = jax.tree_util.tree_map(
-                #         lambda x: x.reshape((batch_size,) + x.shape[2:]),  # 保持第一个维度为batch_size，自动计算第二个维度
+                #         lambda x: x.reshape((batch_size,) + x.shape[2:]),  # keep the leading batch dimension, infer the second
                 #         batch
                 #     )
                 shuffled_batch = jax.tree_util.tree_map(

@@ -22,10 +22,6 @@ models/
 experiments/*/runs/
 experiments/*/watch_*.log
 
-# figures rebuilt by scripts/ (the tracked ones are inputs: icons, frames, overview panels, hand-coded data)
-docs/analysis/*.pdf
-docs/analysis/*.png
-docs/figures/panels_random_*/
-docs/figures/env_mosaic_*
-docs/figures/open_harvest_overview_seed*.png
-docs/*.pptx
+# GIFs written by scripts/render_run.py
+experiments/*/runs/**/gifs/
+*.egg-info/

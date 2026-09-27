@@ -14,7 +14,6 @@
    908
   ],
   "skew": 1.0,
-  "reward": "individual",
   "spawn": 0.1,
   "tools": "shared",
   "random_layout": true,

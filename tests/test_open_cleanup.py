@@ -11,9 +11,7 @@ meta-episodes while staying fixed across the trials inside one, and pollution
 must stay exactly as in vanilla Clean Up (every waste type counts).
 
 Run:
-  ulimit -c 0; ulimit -u $(ulimit -Hu)
-  export PYTHONPATH=$PWD:$PYTHONPATH
-  JAX_PLATFORMS=cpu python tests/test_open_cleanup.py
+  python tests/test_open_cleanup.py
 """
 
 import sys
@@ -221,7 +219,7 @@ def test_every_waste_type_pollutes():
 
 def _space_rules():
     """The enumerated table space, or a 100k sample of it when enumeration
-    would not fit a login node (3**15 tables)."""
+    would not fit in memory (3**15 tables)."""
     from opensocialjax.environments.open_cleanup.open_cleanup import (
         rule_space_size, ENUMERABLE_LIMIT)
     if rule_space_size() > ENUMERABLE_LIMIT:

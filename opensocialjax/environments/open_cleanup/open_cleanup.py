@@ -312,8 +312,7 @@ def all_rules():
     vectorised (base-NUM_TOOLS digits of an index) so no Python list of
     tuples is ever built. For spaces beyond ENUMERABLE_LIMIT callers should
     sample instead (see rule_benchmark.build_benchmark) — 3**15 tables is
-    ~430 MB here and ~1 GB encoded, which is fine on a GPU node but not on
-    a login node."""
+    ~430 MB here and ~1 GB encoded."""
     n = rule_space_size()
     idx = onp.arange(n, dtype=onp.int64)
     digits = onp.empty((n, NUM_DIRT_TYPES), dtype=onp.int16)
@@ -1647,7 +1646,7 @@ class OpenCleanup(MultiAgentEnv):
                 return jnp.where(z, state.grid[a[0], a[1]], -1)
 
             all_zaped_gird = jax.vmap(zaped_gird)(all_zaped_locs, zaps_4_locs)
-            # jax.debug.print("all_zaped_gird {all_zaped_gird} 🤯", all_zaped_gird=all_zaped_gird)
+            # jax.debug.print("all_zaped_gird {all_zaped_gird}", all_zaped_gird=all_zaped_gird)
 
             def check_reborn_player(a):
                 return jnp.isin(a, all_zaped_gird)
@@ -1705,7 +1704,7 @@ class OpenCleanup(MultiAgentEnv):
                     )
 
             qualified_to_zap = zaps.reshape(-1)
-            # jax.debug.print("qualified_to_zap {qualified_to_zap} 🤯", qualified_to_zap=qualified_to_zap)
+            # jax.debug.print("qualified_to_zap {qualified_to_zap}", qualified_to_zap=qualified_to_zap)
             # update grid
             def update_grid(a_i, t, i, grid):
                 return grid.at[t[:, 0], t[:, 1]].set(
@@ -1719,13 +1718,13 @@ class OpenCleanup(MultiAgentEnv):
             #     return grid.at[t[:, 0], t[:, 1]].set(2)
 
 
-            # jax.debug.print("one_step_targets {one_step_targets} 🤯", one_step_targets=one_step_targets)
+            # jax.debug.print("one_step_targets {one_step_targets}", one_step_targets=one_step_targets)
             aux_grid = update_grid(qualified_to_zap, one_step_targets, o_items, aux_grid)
             aux_grid = update_grid(qualified_to_zap, two_step_targets, t_items, aux_grid)
             aux_grid = update_grid(qualified_to_zap, target_right, r_items, aux_grid)
             aux_grid = update_grid(qualified_to_zap, target_left, l_items, aux_grid)
 
-            # jax.debug.print("aux_grid {aux_grid} 🤯", aux_grid=aux_grid)
+            # jax.debug.print("aux_grid {aux_grid}", aux_grid=aux_grid)
             state = state.replace(
                 grid=jnp.where(
                     jnp.any(zaps),
@@ -3024,59 +3023,59 @@ class OpenCleanup(MultiAgentEnv):
 
     def get_cf_regret(self, cf_rewards, actions):
         """
-        计算每个智能体的cf regret（反事实遗憾）。
+        Counterfactual regret of every agent.
         Args:
-            cf_rewards: jnp.ndarray, 形状为[num_agents, num_actions]，每个智能体每个动作的反事实奖励
-            actions: jnp.ndarray, 形状为[num_agents]，每个智能体的实际动作
+            cf_rewards: jnp.ndarray of shape [num_agents, num_actions], the counterfactual reward of every action of every agent
+            actions: jnp.ndarray of shape [num_agents], the action every agent actually took
         Returns:
-            cf_regret: jnp.ndarray, 形状为[num_agents]，每个智能体的cf regret
+            cf_regret: jnp.ndarray of shape [num_agents], the counterfactual regret of every agent
         """
-        # 1. 对每个智能体，找到最大反事实奖励
+        # 1. the best counterfactual reward of every agent
         max_cf_reward = jnp.max(cf_rewards, axis=1)  # [num_agents]
-        # 2. 取实际动作下的反事实奖励
+        # 2. the counterfactual reward of the action actually taken
         actual_cf_reward = cf_rewards[jnp.arange(self.num_agents), actions]  # [num_agents]
-        # 3. 计算cf regret
+        # 3. the regret
         cf_regret = max_cf_reward - actual_cf_reward
         return cf_regret
 
     def get_cf_regret_from_state(self, key, state, actions):
         """
-        计算每个智能体的cf regret（反事实遗憾），通过枚举每个agent的所有可能动作，其他agent动作不变，调用环境获得奖励。
+        Counterfactual regret of every agent: enumerate each agent's actions with the other agents' actions fixed and step the environment for the reward.
         Args:
             key: jax.random.PRNGKey
-            state: 当前环境状态
-            actions: jnp.ndarray, 形状为[num_agents]，每个智能体的实际动作
+            state: the current environment state
+            actions: jnp.ndarray of shape [num_agents], the action every agent actually took
         Returns:
-            cf_regret: jnp.ndarray, 形状为[num_agents]，每个智能体的cf regret
+            cf_regret: jnp.ndarray of shape [num_agents], the counterfactual regret of every agent
         """
         num_agents = self.num_agents
         num_actions = self.num_actions
 
         def agent_cf_rewards(agent_id):
             def single_action_cf(a_cf):
-                # 构造反事实动作
+                # the counterfactual joint action
                 cf_actions = actions.at[agent_id].set(a_cf)
-                # 调用环境获得奖励
+                # step the environment for its reward
                 _, _, rewards, _, _ = self.step_env(key, state, cf_actions)
                 return rewards[agent_id]
-            # 对该agent所有动作枚举
+            # enumerate every action of this agent
             return jax.vmap(single_action_cf)(jnp.arange(num_actions))  # [num_actions]
 
-        # 对所有agent批量计算cf_rewards
+        # cf_rewards of all agents at once
         cf_rewards = jax.vmap(agent_cf_rewards)(jnp.arange(num_agents))  # [num_agents, num_actions]
-        # 计算cf regret
+        # the regret
         cf_regret = self.get_cf_regret(cf_rewards, actions)
         return cf_regret
 
     def get_simple_cf_regret(self, rewards):
         """
-        近似cf regret，只基于当前reward array。
+        An approximate regret from the current reward array only.
         Args:
-            rewards: jnp.ndarray, 形状为[num_agents, 1]
+            rewards: jnp.ndarray of shape [num_agents, 1]
         Returns:
-            regret: jnp.ndarray, 形状为[num_agents]
+            regret: jnp.ndarray of shape [num_agents]
         """
-        max_reward = jnp.max(rewards)  # 全体agent中最大即时奖励
+        max_reward = jnp.max(rewards)  # the largest immediate reward among all agents
         regret = max_reward - rewards.squeeze()
         return regret
 

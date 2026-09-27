@@ -5,7 +5,7 @@
 #   usage: arena_run.sh <EXP_DIR> <SEED>
 set -uo pipefail
 EXP=${1:?exp dir}; SEED=${2:?seed}
-REPO=$(cd "$(dirname "$0")/../.." && pwd); cd $REPO || exit 1; ulimit -c 0
+REPO=${OSJ_REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd $REPO || exit 1; ulimit -c 0   # sbatch copies the script to its spool dir, so the runner passes the repo in OSJ_REPO
 source "${CONDA_SH:-$HOME/miniconda3/etc/profile.d/conda.sh}" && conda activate "${CONDA_ENV:-OpenSocialJax}"
 export PYTHONPATH=$REPO JAX_PLATFORMS=cpu XLA_PYTHON_CLIENT_PREALLOCATE=false
 RUN=$EXP/runs/arena/seed$SEED; mkdir -p $RUN

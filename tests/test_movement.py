@@ -1,9 +1,7 @@
 """Standalone checks for opensocialjax.environments.movement (no pytest).
 
-Run on a compute node:
-  ulimit -c 0
-  export PYTHONPATH=$PWD:$PYTHONPATH
-  srun -n 1 env JAX_PLATFORMS=cpu ~/ENTER/envs/SocialJax/bin/python tests/test_movement.py
+Run:
+  python tests/test_movement.py
 """
 
 import jax
