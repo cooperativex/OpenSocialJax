@@ -201,7 +201,7 @@ different models start from `open_harvest_arena` (edit `roster`); for cooperator
 ## The environments
 
 <p align="center">
-  <img src="docs/figures/harvest_overview.png" alt="OpenHarvest overview" width="100%">
+  <img src="docs/figures/open_cleanup_overview.png" alt="OpenCleanup: environment components, sampling a latent configuration, instantiating and interacting" width="100%">
 </p>
 
 **OpenCleanup** (`open_cleanup`) is Clean Up with a crafting rule. The river carries waste of one hue in three
@@ -209,6 +209,10 @@ shades, and cleaning it needs a chain of three *working tools* (dark → mid →
 ordered pair of pick-ups from four base-tool stations; *which* of the 16 ordered pairs make which tool is the hidden
 rule, one of $P(16,7) = 57{,}657{,}600$ rule sets. Apples grow only while the river is clean enough, so cleaning is a
 public good that some agents must provide while every apple pays only its eater.
+
+<p align="center">
+  <img src="docs/figures/open_harvest_overview.png" alt="OpenHarvest: environment components, sampling a latent configuration, instantiating and interacting" width="100%">
+</p>
 
 **OpenHarvest** (`open_harvest`) is Commons Harvest with ripeness. Apples are unripe, ripe or over-ripe and then rot.
 For every hue, the points an apple pays at each stage (an order of 1 / 0.5 / 0.25) and how fast its cell regrows
