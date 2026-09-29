@@ -227,7 +227,3 @@ speed_test/        random-action throughput of the environments
 docs/              configuration.md and the figures above
 ```
 
-## Citation
-
-This repository accompanies a paper under double-blind review; the citation will be added once the review is over.
-The environments and the JAX infrastructure build on [SocialJax](https://arxiv.org/abs/2503.14576) (ICLR 2026).
