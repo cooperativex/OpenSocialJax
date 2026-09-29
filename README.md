@@ -2,9 +2,6 @@
 
 *Two sequential social dilemmas with hidden rules to discover, in JAX, and a harness for LLM agents to play them.*
 
-OpenSocialJax extends [SocialJax](https://arxiv.org/abs/2503.14576) (ICLR 2026) with two environments in which the
-agents must work out how the world works while the social dilemma is in force, and with everything needed to run
-language models as agents in them:
 
 - **OpenCleanup** and **OpenHarvest** — Clean Up and Commons Harvest, each with a latent configuration (a hidden
   rule set, a map, colours) sampled per meta-episode from held-out splits.
