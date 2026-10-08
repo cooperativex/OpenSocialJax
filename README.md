@@ -237,17 +237,4 @@ speed_test/        random-action throughput of the environments
 docs/              configuration.md and the figures above
 ```
 
-## Citation
 
-OpenSocialJax builds on SocialJax. If you use it, please cite:
-
-```bibtex
-@inproceedings{guo2025socialjax,
-  title={{SocialJax}: An Evaluation Suite for Multi-agent Reinforcement Learning in Sequential Social Dilemmas},
-  author={Guo, Zihao and Shi, Shuqing and Willis, Richard and Tomilin, Tristan and Leibo, Joel Z. and Du, Yali},
-  booktitle={International Conference on Learning Representations (ICLR)},
-  year={2026},
-}
-```
-
-A citation for the OpenCleanup / OpenHarvest paper will be added when it is available.
