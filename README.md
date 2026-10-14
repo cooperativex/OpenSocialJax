@@ -1,8 +1,12 @@
 <h1 align="center">OpenSocialJax</h1>
 
 <p align="center">
+  <a href="https://arxiv.org/abs/2610.13710">
+    <img src="https://img.shields.io/badge/arXiv-2610.13710-b31b1b.svg" alt="arXiv"></a>
+  
   <a href="https://github.com/cooperativex/OpenSocialJax/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="Apache 2.0 License"></a>
+  
   <a href="https://github.com/cooperativex/OpenSocialJax/actions/workflows/tests.yml">
     <img src="https://github.com/cooperativex/OpenSocialJax/actions/workflows/tests.yml/badge.svg" alt="tests"></a>
 </p>
