@@ -20,3 +20,9 @@ defaults:
   "rot_range": [2, 5]
   "rates": [2.0, 1.0, 0.5]
   "layouts": "random"
+
+# Extra policy inputs (rppo_cnn_open_harvest.policy_extras), next to the previous action and own points:
+# the hue and stage of the apple the agent just ate -- what the LLM agents are told after every eat;
+"LAST_EATEN_INPUT": True
+# the meta-episode's true pay and regrowth tables: an oracle control only, NOT the LLM's game.
+"ORACLE_RULE_INPUT": False

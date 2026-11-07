@@ -45,6 +45,10 @@
 "RNN_HIDDEN_SIZE": 1024
 "HEAD_HIDDEN_SIZE": 256
 "ADAM_EPS": 1.0e-8
+# False: actor and critic share the encoder + GRU (XLand-MiniGrid). True: the critic has its own encoder, GRU and
+# optimiser (JaxMARL MAPPO / Mava / Stoix). With a shared trunk and returns of tens of points the value loss
+# supplies ~99.7 % of the trunk's gradient (OpenHarvest, 11-07), so the GRU is shaped by the critic, not the policy.
+"SEPARATE_CRITIC": False
 # Self-supervised auxiliary loss weight (0 disables). Only environments that
 # define an auxiliary target support it (OpenCleanup: from the hidden state,
 # predict whether this step's cleaning shot clears its target).

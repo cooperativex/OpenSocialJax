@@ -38,8 +38,9 @@ def _save_metrics(metrics, name):
     print(f"** Saved learning curves -> evaluation/curves/{name}.npz **")
 
 
-def single_run(config, make_train, *, wandb_name, build_env, obs_layout):
-    """One training run, saving + evaluating at the end (a GIF of the policy on the held-out environment)."""
+def single_run(config, make_train, *, wandb_name, build_env, obs_layout, policy_extras=None):
+    """One training run, saving + evaluating at the end (a GIF of the policy on the held-out environment).
+    policy_extras: the env module's `config -> (dim, fn) | None` of extra policy inputs (see rl2.make_train)."""
     config = OmegaConf.to_container(config)
 
     # The suffix (reward, and OpenCleanup's training curriculum) lets runs of
@@ -50,6 +51,10 @@ def single_run(config, make_train, *, wandb_name, build_env, obs_layout):
     dirt = config.get("TRAIN_INITIAL_DIRT", 1.0)      # OpenCleanup's training curriculum, if any
     if isinstance(dirt, (list, tuple)):
         suffix += f"_dirt{dirt[0]:g}-{dirt[1]:g}"
+    if config.get("SEPARATE_CRITIC", False):
+        suffix += "_sepcritic"
+    if config.get("ORACLE_RULE_INPUT", False):          # OpenHarvest's oracle control: the rule is an input
+        suffix += "_oracle"
 
     wandb.init(
         entity=config["ENTITY"],
@@ -77,7 +82,8 @@ def single_run(config, make_train, *, wandb_name, build_env, obs_layout):
     save_path = f"./checkpoints/rppo/{filename}.pkl"
     save_params(train_state, save_path)
     params = load_params(save_path)
-    evaluate(params, build_env(config, on_train=False), save_path, config, obs_layout)
+    evaluate(params, build_env(config, on_train=False), save_path, config, obs_layout,
+             extras=policy_extras(config) if policy_extras else None)
 
 
 def tune(default_config, make_train, *, sweep_name):

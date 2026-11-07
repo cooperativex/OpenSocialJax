@@ -223,7 +223,7 @@ def evaluate_mappo_style(params, env, save_path, config, use_actor_only=True):
         wandb.log({"Episode GIF": wandb.Video(gif_path, caption="Evaluation Episode", format="gif")})
 
 
-def evaluate_rppo(params, env, save_path, config, obs_layout):
+def evaluate_rppo(params, env, save_path, config, obs_layout, extras=None):
     """Evaluation for recurrent (RL^2) policies.
 
     Same GIF output as the feed-forward evaluators, but the hidden state has
@@ -231,11 +231,12 @@ def evaluate_rppo(params, env, save_path, config, obs_layout):
     reward — a recurrent agent evaluated statelessly would look untrained.
     The rollout is not reset between trials, which is the point: memory built
     up in trial 1 is what should make trial 2 better. `obs_layout` is the
-    environment's channel layout (see ActorCriticRNN); with REWARD=common the
-    previous reward fed back is the team's, as in training.
+    environment's channel layout (see ActorCriticRNN); the previous reward fed
+    back is the agent's own points, whatever REWARD is, as in training, and
+    `extras` the environment's further inputs (rl2.make_train's `extras`).
     """
-    from algorithms.RPPO.rl2 import training_reward
-    from algorithms.utils.networks import ActorCriticRNN, ScannedRNN
+    from algorithms.RPPO.rl2 import policy_rewards, make_network, carry_size
+    from algorithms.utils.networks import ScannedRNN
 
     rng = jax.random.PRNGKey(0)
     rng, _rng = jax.random.split(rng)
@@ -259,19 +260,14 @@ def evaluate_rppo(params, env, save_path, config, obs_layout):
     Path(root_dir + "/state_pics").mkdir(parents=True, exist_ok=True)
 
     n_agents = len(env.agents)
-    network = ActorCriticRNN(
-        action_dim=env.action_space().n,
-        activation=config.get("ACTIVATION", "relu"),
-        hidden_size=config.get("RNN_HIDDEN_SIZE", 128),
-        head_hidden_size=config.get("HEAD_HIDDEN_SIZE", 64),
-        obs_layout=tuple(obs_layout),
-        aux=float(config.get("AUX_COEF", 0.0)) > 0.0,
-    )
+    extra_dim, extra_fn = extras if extras is not None else (0, None)
+    network = make_network(config, env, obs_layout, extra_dim)
     apply_fn = jax.jit(network.apply)
 
-    hstate = ScannedRNN.initialize_carry(n_agents, config.get("RNN_HIDDEN_SIZE", 128))
+    hstate = ScannedRNN.initialize_carry(n_agents, carry_size(config))
     prev_action = jnp.zeros(n_agents, dtype=jnp.int32)
     prev_reward = jnp.zeros(n_agents)
+    prev_extra = extra_fn(state, None) if extra_dim else None
     last_done = jnp.zeros(n_agents, dtype=bool)
 
     num_frames = int(config.get("GIF_NUM_FRAMES", 0))
@@ -281,7 +277,8 @@ def evaluate_rppo(params, env, save_path, config, obs_layout):
             params,
             hstate,
             (obs_batch[None, :], prev_action[None, :],
-             prev_reward[None, :], last_done[None, :]),
+             prev_reward[None, :], last_done[None, :])
+            + ((prev_extra[None, :],) if extra_dim else ()),
         )
         rng, _rng = jax.random.split(rng)
         action = pi.sample(seed=_rng).squeeze(0)
@@ -291,8 +288,10 @@ def evaluate_rppo(params, env, save_path, config, obs_layout):
             _rng, state, [int(a) for a in action]
         )
         prev_action = action
-        prev_reward = training_reward(jnp.asarray(reward, dtype=jnp.float32).reshape(-1)[:n_agents],
-                                      config.get("REWARD", "individual"))
+        prev_reward = policy_rewards(jnp.asarray(reward, dtype=jnp.float32).reshape(-1)[:n_agents],
+                                     config.get("REWARD", "individual"))[1]
+        if extra_dim:
+            prev_extra = extra_fn(state, info)
         last_done = jnp.full(n_agents, bool(done["__all__"]))
 
         pics.append(env.render(state))

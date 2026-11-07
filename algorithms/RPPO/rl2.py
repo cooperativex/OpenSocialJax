@@ -18,11 +18,21 @@ Two things differ from the feed-forward IPPO loop, and both matter:
    sequence through the GRU. The feed-forward loop flattens (time x actor) and shuffles, which would destroy the
    sequences.
 
-Rewards (config REWARD): the environments pay each agent its own reward, and that is what `individual` trains on.
-`common` trains every agent on the sum over the agents of its environment (what SocialJax's shared_rewards did).
-The switch lives here, not in the environments, so the environments and the LLM harness stay individual-only. The
-previous reward the policy sees is the one it is trained on; returns are always logged as the environment's own,
-per agent (with common rewards the team's total is that times the number of agents).
+Rewards (config REWARD), all in the LLM harness's points: both environments pay an apple as num_agents x its value
+to the agent that ate it, and the harness divides by num_agents (llm_policy/open_*_policy.py, own_scale), so
+`own_points` = what an LLM agent is shown and scored on. `individual` trains each agent on its own points; `common`
+trains every agent on the sum of its environment's points (what SocialJax's shared_rewards did). The switch lives
+here, not in the environments, so the environments and the LLM harness stay individual-only.
+The previous reward the policy SEES is always its own points, in both modes, as the LLM is told only what it ate
+itself: it is the evidence the hidden rule is read off, and the team's sum would mix in what the others ate. So the
+two modes give the agent the same information and differ only in what it is trained to maximise.
+Logged: train/reward_per_step is the reward trained on (points); eval/returns_* is the environments' own reward
+averaged over the agents, which (an apple paying num_agents x its value) is the team's points.
+
+Extra inputs (per-env `extras`): an environment can feed the policy further facts about the step it just took,
+concatenated to the GRU input next to the previous reward (OpenHarvest: the hue and stage of the apple the agent ate,
+which the LLM agents are told; optionally the true rule, for an oracle control). SEPARATE_CRITIC gives the critic its
+own encoder, GRU and optimiser (JaxMARL MAPPO / Mava / Stoix); otherwise actor and critic share one trunk (XLand).
 
 Actor order: batchify lays actors out agent-major (index = agent * NUM_ENVS + env); every per-actor array here —
 observations, actions, rewards, hidden states and the info leaves — follows that order.
@@ -48,12 +58,25 @@ REWARDS = ("individual", "common")
 
 
 def training_reward(reward, mode):
-    """`reward`: (..., num_agents) of the environment's own rewards. `individual` keeps them; `common` gives every
+    """`reward`: (..., num_agents) of each agent's own reward. `individual` keeps them; `common` gives every
     agent the sum over the agents of its environment."""
     assert mode in REWARDS, f"REWARD must be one of {REWARDS}, got {mode!r}"
     if mode == "individual":
         return reward
     return jnp.broadcast_to(reward.sum(axis=-1, keepdims=True), reward.shape)
+
+
+def own_points(reward):
+    """`reward`: (..., num_agents) of the environment's own rewards -> each agent's points, the harness's unit (the
+    environments pay an apple as num_agents x its value to its eater; the LLM harness divides by num_agents too)."""
+    return reward / reward.shape[-1]
+
+
+def policy_rewards(reward, mode):
+    """`reward`: (..., num_agents) of the environment's own rewards -> (trained_on, seen): the reward the update
+    maximises (REWARD mode, in points) and the previous reward fed back to the policy (always its own points)."""
+    seen = own_points(reward)
+    return training_reward(seen, mode), seen
 
 
 def split_sequence_minibatches(permutation, init_hstate, batch,
@@ -87,7 +110,7 @@ def split_sequence_minibatches(permutation, init_hstate, batch,
     return hstate_mb, batch_mb
 
 
-def make_network(config, env, obs_layout):
+def make_network(config, env, obs_layout, extra_dim=0):
     return ActorCriticRNN(
         env.action_space().n,
         activation=config["ACTIVATION"],
@@ -95,16 +118,31 @@ def make_network(config, env, obs_layout):
         head_hidden_size=config.get("HEAD_HIDDEN_SIZE", 64),
         obs_layout=tuple(obs_layout),
         aux=float(config.get("AUX_COEF", 0.0)) > 0.0,
+        extra_dim=int(extra_dim),
+        separate_critic=bool(config.get("SEPARATE_CRITIC", False)),
     )
 
 
-def make_train(config, env, eval_env, obs_layout, aux_target=None):
+def carry_size(config):
+    """Width of the recurrent state the trainer carries per actor (the critic's GRU, if separate, rides along)."""
+    return ActorCriticRNN.carry_size(config["RNN_HIDDEN_SIZE"], bool(config.get("SEPARATE_CRITIC", False)))
+
+
+def actor_labels(params):
+    """optax.multi_transform labels for SEPARATE_CRITIC: every top-level module named critic_* is the critic's."""
+    return {"params": {k: jax.tree.map(lambda _, c=k.startswith("critic_"): "critic" if c else "actor", v)
+                       for k, v in params["params"].items()}}
+
+
+def make_train(config, env, eval_env, obs_layout, aux_target=None, extras=None):
     """The RL^2 training function for one environment.
 
     env / eval_env: the training and the held-out environment (unwrapped; the same game on disjoint rule and map
     splits). obs_layout: the (kind, colour, agent-feature, held-tool) channel counts of the observation, see
     ActorCriticRNN. aux_target: optional `info -> (label, mask)`, both (T, actors), for the AUX_COEF loss: from the
-    hidden state at step t predict `label`, graded only where `mask` is on.
+    hidden state at step t predict `label`, graded only where `mask` is on. extras: optional `(dim, fn)` with
+    `fn(state, info) -> (num_agents, dim)` for one unwrapped environment: what each agent is shown about the step that
+    led to `state` (`info=None` right after a reset); fed to the policy on its next step.
     """
     reward_mode = config.get("REWARD", "individual")
     assert reward_mode in REWARDS, f"REWARD must be one of {REWARDS}, got {reward_mode!r}"
@@ -132,6 +170,26 @@ def make_train(config, env, eval_env, obs_layout, aux_target=None):
     )
     inner, outer = int(eval_env.num_inner_steps), int(eval_env.num_outer_steps)
     obs_shape = env.observation_space()[0].shape
+    extra_dim, extra_fn = extras if extras is not None else (0, None)
+    separate_critic = bool(config.get("SEPARATE_CRITIC", False))
+
+    def net_in(obs, prev_action, prev_reward, resets, extra):
+        """the network's input tuple; the extra input only exists when the environment gives one"""
+        return (obs, prev_action, prev_reward, resets) + ((extra,) if extra_dim else ())
+
+    def env_extras(env_state, info):
+        """(NUM_ACTORS, extra_dim), agent-major, for the vmapped LogWrapper states (info None right after reset)"""
+        if not extra_dim:
+            return jnp.zeros((config["NUM_ACTORS"], 0))
+        if info is None:
+            ex = jax.vmap(lambda st: extra_fn(st, None))(env_state.env_state)
+        else:
+            ex = jax.vmap(extra_fn)(env_state.env_state, info)          # (NUM_ENVS, n_agents, extra_dim)
+        return jnp.swapaxes(ex, 0, 1).reshape(config["NUM_ACTORS"], extra_dim)
+
+    def one_env_extras(state, info):
+        """(n_agents, extra_dim) for one unwrapped environment (the held-out evaluation)"""
+        return extra_fn(state, info) if extra_dim else jnp.zeros((n_agents, 0))
 
     env = LogWrapper(env, replace_info=False)
 
@@ -159,16 +217,15 @@ def make_train(config, env, eval_env, obs_layout, aux_target=None):
         return config["LR"] * frac
 
     def train(rng):
-        network = make_network(config, env, obs_layout)
+        network = make_network(config, env, obs_layout, extra_dim)
         rng, _rng = jax.random.split(rng)
-        init_hstate = ScannedRNN.initialize_carry(
-            config["NUM_ACTORS"], config["RNN_HIDDEN_SIZE"]
-        )
-        init_x = (
+        init_hstate = ScannedRNN.initialize_carry(config["NUM_ACTORS"], carry_size(config))
+        init_x = net_in(
             jnp.zeros((1, config["NUM_ACTORS"], *obs_shape)),
             jnp.zeros((1, config["NUM_ACTORS"]), dtype=jnp.int32),
             jnp.zeros((1, config["NUM_ACTORS"])),
             jnp.zeros((1, config["NUM_ACTORS"]), dtype=bool),
+            jnp.zeros((1, config["NUM_ACTORS"], extra_dim)),
         )
         network_params = network.init(_rng, init_hstate, init_x)
         # Warm start (curriculum, XLand's trivial -> small staging): replace the
@@ -187,16 +244,17 @@ def make_train(config, env, eval_env, obs_layout, aux_target=None):
             print(f"[warm start] initialised from {warm}")
 
         adam_eps = config.get("ADAM_EPS", 1e-5)
-        if config["ANNEAL_LR"]:
-            tx = optax.chain(
+
+        def optimiser():
+            return optax.chain(
                 optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
-                optax.adam(learning_rate=linear_schedule, eps=adam_eps),
+                optax.adam(learning_rate=linear_schedule if config["ANNEAL_LR"] else config["LR"], eps=adam_eps),
             )
+        if separate_critic:
+            # MAPPO-style: the actor and the critic each clip their own gradient and keep their own Adam state
+            tx = optax.multi_transform({"actor": optimiser(), "critic": optimiser()}, actor_labels)
         else:
-            tx = optax.chain(
-                optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
-                optax.adam(config["LR"], eps=adam_eps),
-            )
+            tx = optimiser()
         train_state = TrainState.create(apply_fn=network.apply,
                                         params=network_params, tx=tx)
 
@@ -208,6 +266,7 @@ def make_train(config, env, eval_env, obs_layout, aux_target=None):
         init_prev_action = jnp.zeros(config["NUM_ACTORS"], dtype=jnp.int32)
         init_prev_reward = jnp.zeros(config["NUM_ACTORS"])
         init_done = jnp.zeros(config["NUM_ACTORS"], dtype=bool)
+        init_extra = env_extras(env_state, None)
 
         def _eval_on_held_out(params, key):
             """Roll out whole meta-episodes on held-out rules and maps.
@@ -223,26 +282,25 @@ def make_train(config, env, eval_env, obs_layout, aux_target=None):
                 obs, state = eval_env.reset(kr)
 
                 def step_fn(carry, _):
-                    state, obs, hstate, prev_a, prev_r, last_d, key = carry
+                    state, obs, hstate, prev_a, prev_r, prev_x, last_d, key = carry
                     obs_b = jnp.stack([obs[a] for a in eval_env.agents])
                     hstate, pi, *_ = network.apply(
                         params, hstate,
-                        (obs_b[None, :], prev_a[None, :],
-                         prev_r[None, :], last_d[None, :]))
+                        net_in(obs_b[None, :], prev_a[None, :],
+                               prev_r[None, :], last_d[None, :], prev_x[None, :]))
                     key, ka, ks = jax.random.split(key, 3)
                     action = pi.sample(seed=ka).squeeze(0)
-                    obs, state, reward, done, _ = eval_env.step(
+                    obs, state, reward, done, info = eval_env.step(
                         ks, state, list(action))
                     reward = jnp.asarray(reward, dtype=jnp.float32).reshape(-1)[:n_agents]
                     carry = (state, obs, hstate, action,
-                             training_reward(reward, reward_mode),
+                             policy_rewards(reward, reward_mode)[1], one_env_extras(state, info),
                              jnp.full(n_agents, done["__all__"]), key)
                     return carry, reward.mean()
 
-                hstate = ScannedRNN.initialize_carry(
-                    n_agents, config["RNN_HIDDEN_SIZE"])
+                hstate = ScannedRNN.initialize_carry(n_agents, carry_size(config))
                 carry = (state, obs, hstate, jnp.zeros(n_agents, dtype=jnp.int32),
-                         jnp.zeros(n_agents), jnp.zeros(n_agents, dtype=bool), key)
+                         jnp.zeros(n_agents), one_env_extras(state, None), jnp.zeros(n_agents, dtype=bool), key)
                 _, rewards = jax.lax.scan(step_fn, carry, None, inner * outer)
                 return rewards.reshape(outer, inner).sum(axis=1)
 
@@ -258,17 +316,18 @@ def make_train(config, env, eval_env, obs_layout, aux_target=None):
         def _update_step(runner_state, unused):
             def _env_step(runner_state, unused):
                 (train_state, env_state, last_obs, last_done, prev_action,
-                 prev_reward, hstate, update_step, last_eval, rng) = runner_state
+                 prev_reward, prev_extra, hstate, update_step, last_eval, rng) = runner_state
 
                 obs_batch = jnp.transpose(last_obs, (1, 0, 2, 3, 4)).reshape(
                     -1, *obs_shape
                 )
                 # one timestep: add a leading time axis of length 1
-                ac_in = (
+                ac_in = net_in(
                     obs_batch[None, :],
                     prev_action[None, :],
                     prev_reward[None, :],
                     last_done[None, :],
+                    prev_extra[None, :],
                 )
                 new_hstate, pi, value, *_ = network.apply(
                     train_state.params, hstate, ac_in)
@@ -290,15 +349,20 @@ def make_train(config, env, eval_env, obs_layout, aux_target=None):
                     env.step, in_axes=(0, 0, 0)
                 )(rng_step, env_state, env_act)
 
+                extra_batch = env_extras(env_state, info)      # what each agent is shown about this step
                 info = per_actor(info)
                 done_batch = batchify_dict(
                     done, env.agents, config["NUM_ACTORS"]
                 ).squeeze()
-                # (NUM_ENVS, n_agents): the reward this run trains on, then one per actor
-                reward = training_reward(
+                # (NUM_ENVS, n_agents): the reward this run trains on and the one the policy sees next step
+                # (its own points, whatever REWARD is), then one per actor
+                trained_on, seen = policy_rewards(
                     jnp.asarray(reward, dtype=jnp.float32).reshape(config["NUM_ENVS"], n_agents), reward_mode)
                 reward_batch = batchify(
-                    reward, env.agents, config["NUM_ACTORS"]
+                    trained_on, env.agents, config["NUM_ACTORS"]
+                ).squeeze()
+                seen_batch = batchify(
+                    seen, env.agents, config["NUM_ACTORS"]
                 ).squeeze()
 
                 # No reward shaping. Paying an agent for a step towards the
@@ -316,30 +380,31 @@ def make_train(config, env, eval_env, obs_layout, aux_target=None):
                     obs_batch,
                     prev_action,
                     prev_reward,
+                    prev_extra,
                     info,
                 )
                 runner_state = (train_state, env_state, obsv, done_batch,
-                                action, reward_batch, new_hstate, update_step,
+                                action, seen_batch, extra_batch, new_hstate, update_step,
                                 last_eval, rng)
                 return runner_state, transition
 
             # the hidden state at the start of the rollout is what the update
             # has to replay from, so keep a copy before the scan overwrites it
-            initial_hstate = runner_state[6]
+            initial_hstate = runner_state[7]
             runner_state, traj_batch = jax.lax.scan(
                 _env_step, runner_state, None, config["NUM_STEPS"]
             )
 
             (train_state, env_state, last_obs, last_done, prev_action,
-             prev_reward, hstate, update_step, last_eval, rng) = runner_state
+             prev_reward, prev_extra, hstate, update_step, last_eval, rng) = runner_state
             last_obs_batch = jnp.transpose(last_obs, (1, 0, 2, 3, 4)).reshape(
                 -1, *obs_shape
             )
             _, _, last_val, *_ = network.apply(
                 train_state.params,
                 hstate,
-                (last_obs_batch[None, :], prev_action[None, :],
-                 prev_reward[None, :], last_done[None, :]),
+                net_in(last_obs_batch[None, :], prev_action[None, :],
+                       prev_reward[None, :], last_done[None, :], prev_extra[None, :]),
             )
             last_val = last_val.squeeze(0)
 
@@ -374,8 +439,8 @@ def make_train(config, env, eval_env, obs_layout, aux_target=None):
                         _, pi, value, *aux_out = network.apply(
                             params,
                             init_hs,
-                            (traj_batch.obs, traj_batch.prev_action,
-                             traj_batch.prev_reward, traj_batch.last_done),
+                            net_in(traj_batch.obs, traj_batch.prev_action,
+                                   traj_batch.prev_reward, traj_batch.last_done, traj_batch.prev_extra),
                         )
                         log_prob = pi.log_prob(traj_batch.action)
 
@@ -500,13 +565,13 @@ def make_train(config, env, eval_env, obs_layout, aux_target=None):
                 jax.debug.callback(callback, metric)
 
             runner_state = (train_state, env_state, last_obs, last_done,
-                            prev_action, prev_reward, hstate, update_step,
+                            prev_action, prev_reward, prev_extra, hstate, update_step,
                             eval_stats, rng)
             return runner_state, metric
 
         rng, _rng = jax.random.split(rng)
         runner_state = (train_state, env_state, obsv, init_done,
-                        init_prev_action, init_prev_reward, init_hstate, 0,
+                        init_prev_action, init_prev_reward, init_extra, init_hstate, 0,
                         jnp.zeros(3 + outer), _rng)
         runner_state, metric = jax.lax.scan(
             _update_step, runner_state, None, config["NUM_UPDATES"]

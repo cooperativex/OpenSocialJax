@@ -435,8 +435,18 @@ class ActorCriticRNN(nn.Module):
     (``Dense(head) -> tanh -> Dense(out)``, orthogonal(2)/(0.01)/(1.0)).
 
     Call signature: ``(hstate, (obs, prev_action, prev_reward, resets))``
-    with a leading time axis; returns ``(hstate, pi, value)`` or, with
-    ``aux=True``, ``(hstate, pi, value, aux_logit)``.
+    with a leading time axis — plus a fifth ``extra`` input ``(T, B,
+    extra_dim)`` when ``extra_dim > 0`` (environment-specific feedback about
+    the previous step, concatenated to the GRU input like the previous
+    reward); returns ``(hstate, pi, value)`` or, with ``aux=True``,
+    ``(hstate, pi, value, aux_logit)``.
+
+    ``separate_critic``: the critic gets its own encoder and GRU (``critic_*``
+    parameters) instead of sharing the actor's, as JaxMARL's MAPPO, Mava and
+    Stoix do, so the shared trunk is not trained mostly by the value loss.
+    The hidden state is then ``(B, 2 * hidden_size)``: actor half, critic half
+    (``carry_size``). With both options off the parameters are exactly the
+    shared-trunk network's.
 
     ``obs_layout`` = (kind channels, colour channels, agent-feature
     channels, held-tool channels), in the order the environment lays them
@@ -456,10 +466,19 @@ class ActorCriticRNN(nn.Module):
     # and ripeness) and holds nothing, so it is (item channels, 0, 10, 0).
     obs_layout: Sequence[int] = (10, 10, 10, 10)
     aux: bool = False
+    extra_dim: int = 0
+    separate_critic: bool = False
+
+    @staticmethod
+    def carry_size(hidden_size, separate_critic=False):
+        return hidden_size * (2 if separate_critic else 1)
 
     @nn.compact
     def __call__(self, hstate, x):
-        obs, prev_action, prev_reward, resets = x
+        obs, prev_action, prev_reward, resets = x[:4]
+        extra = x[4] if len(x) > 4 else None
+        assert (extra is None) == (self.extra_dim == 0) and (extra is None or extra.shape[-1] == self.extra_dim), (
+            f"extra input {None if extra is None else extra.shape} does not match extra_dim={self.extra_dim}")
         t, b = obs.shape[0], obs.shape[1]
         n_kind, n_col, n_feat, n_held = self.obs_layout
         assert obs.shape[-1] == n_kind + n_col + n_feat + n_held, (
@@ -473,44 +492,58 @@ class ActorCriticRNN(nn.Module):
         # the held tool is broadcast into every cell; read it once
         held = cells[:, 0, 0, n_kind + n_col + n_feat:]
 
-        # EmbeddingEncoder: one embedding per axis, concatenated per cell
-        emb = [nn.Dense(self.obs_emb_dim, name="kind_emb")(kind)]
-        if n_col:
-            emb.append(nn.Dense(self.obs_emb_dim, name="colour_emb")(colour))
-        emb.append(nn.Dense(self.obs_emb_dim, name="feat_emb")(feats))
-        emb = jnp.concatenate(emb, axis=-1)
-        h = emb
-        for width in (16, 32, 64):
-            h = nn.Conv(width, (2, 2), padding="VALID",
-                        kernel_init=orthogonal(math.sqrt(2)))(h)
-            h = nn.relu(h)
-        obs_emb = h.reshape(t, b, -1)
+        def trunk(prefix, carry):
+            """encoder + GRU. prefix "" = the shared/actor trunk with the original parameter names (auto-named
+            Conv_k / Embed_0 / ScannedRNN_0); "critic_" = the separate critic's copy."""
+            name = (lambda n: None) if not prefix else (lambda n: prefix + n)
+            # EmbeddingEncoder: one embedding per axis, concatenated per cell
+            emb = [nn.Dense(self.obs_emb_dim, name=f"{prefix}kind_emb")(kind)]
+            if n_col:
+                emb.append(nn.Dense(self.obs_emb_dim, name=f"{prefix}colour_emb")(colour))
+            emb.append(nn.Dense(self.obs_emb_dim, name=f"{prefix}feat_emb")(feats))
+            h = jnp.concatenate(emb, axis=-1)
+            for k, width in enumerate((16, 32, 64)):
+                h = nn.Conv(width, (2, 2), padding="VALID",
+                            kernel_init=orthogonal(math.sqrt(2)), name=name(f"Conv_{k}"))(h)
+                h = nn.relu(h)
+            obs_emb = h.reshape(t, b, -1)
 
-        act_emb = nn.Embed(
-            num_embeddings=self.action_dim, features=self.action_embed_dim,
-        )(prev_action.astype(jnp.int32))
+            act_emb = nn.Embed(
+                num_embeddings=self.action_dim, features=self.action_embed_dim, name=name("Embed_0"),
+            )(prev_action.astype(jnp.int32))
 
-        if n_held:
-            held_emb = nn.Dense(self.action_embed_dim, name="held_emb")(
-                held).reshape(t, b, -1)
-            rnn_in = [obs_emb, held_emb, act_emb, prev_reward[..., None]]
-        else:
-            rnn_in = [obs_emb, act_emb, prev_reward[..., None]]
-        rnn_in = jnp.concatenate(rnn_in, axis=-1)
-        hstate, rnn_out = ScannedRNN(self.hidden_size)(hstate, (rnn_in, resets))
+            rnn_in = [obs_emb]
+            if n_held:
+                rnn_in.append(nn.Dense(self.action_embed_dim, name=f"{prefix}held_emb")(
+                    held).reshape(t, b, -1))
+            rnn_in += [act_emb, prev_reward[..., None]]
+            if extra is not None:
+                rnn_in.append(extra.astype(jnp.float32))
+            rnn_in = jnp.concatenate(rnn_in, axis=-1)
+            return ScannedRNN(self.hidden_size, name=name("ScannedRNN_0"))(carry, (rnn_in, resets))
 
-        def head(out_dim, final_scale, name):
+        def head(z, out_dim, final_scale, name):
             z = nn.Dense(self.head_hidden_size, kernel_init=orthogonal(2),
-                         name=f"{name}_hidden")(rnn_out)
+                         name=f"{name}_hidden")(z)
             z = nn.tanh(z)
             return nn.Dense(out_dim, kernel_init=orthogonal(final_scale),
                             name=f"{name}_out")(z)
 
-        logits = head(self.action_dim, 0.01, "actor")
+        H = self.hidden_size
+        if self.separate_critic:
+            assert hstate.shape[-1] == 2 * H, f"separate_critic needs a (B, {2 * H}) hidden state, got {hstate.shape}"
+            h_actor, actor_out = trunk("", hstate[:, :H])
+            h_critic, critic_out = trunk("critic_", hstate[:, H:])
+            hstate = jnp.concatenate([h_actor, h_critic], axis=-1)
+        else:
+            hstate, actor_out = trunk("", hstate)
+            critic_out = actor_out
+
+        logits = head(actor_out, self.action_dim, 0.01, "actor")
         pi = distrax.Categorical(logits=logits)
-        value = jnp.squeeze(head(1, 1.0, "critic"), axis=-1)
+        value = jnp.squeeze(head(critic_out, 1, 1.0, "critic"), axis=-1)
 
         if self.aux:
-            aux_logit = jnp.squeeze(head(1, 1.0, "aux"), axis=-1)
+            aux_logit = jnp.squeeze(head(actor_out, 1, 1.0, "aux"), axis=-1)
             return hstate, pi, value, aux_logit
         return hstate, pi, value

@@ -59,7 +59,8 @@ class RecurrentTransition(NamedTuple):
     memory leak across episode boundaries during the update.
 
     `prev_action` / `prev_reward` are the RL^2 inputs — what the agent did on
-    the previous step and what it got for it.
+    the previous step and what it got for it; `prev_extra` the environment's
+    further feedback about that step (`(actors, 0)` when it gives none).
     """
     done: jnp.ndarray
     last_done: jnp.ndarray
@@ -70,4 +71,5 @@ class RecurrentTransition(NamedTuple):
     obs: jnp.ndarray
     prev_action: jnp.ndarray
     prev_reward: jnp.ndarray
+    prev_extra: jnp.ndarray
     info: jnp.ndarray

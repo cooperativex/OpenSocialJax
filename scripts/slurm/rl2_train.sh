@@ -8,6 +8,9 @@
 # RL^2 (recurrent PPO) training on one GPU: algorithms/train.py --algo RPPO on OpenCleanup or OpenHarvest.
 #   usage (from the repository root): sbatch [--account=<account>] scripts/slurm/rl2_train.sh <open_cleanup|open_harvest> [overrides]
 #   e.g.  sbatch scripts/slurm/rl2_train.sh open_harvest reward=common SEED=1 TOTAL_TIMESTEPS=3e8
+#   OpenHarvest with a separate critic (+ the default what-was-eaten input), and its oracle control:
+#         sbatch scripts/slurm/rl2_train.sh open_harvest reward=common SEPARATE_CRITIC=True TOTAL_TIMESTEPS=3e8
+#         sbatch scripts/slurm/rl2_train.sh open_harvest reward=common SEPARATE_CRITIC=True ORACLE_RULE_INPUT=True TOTAL_TIMESTEPS=3e8
 # Overrides are Hydra's (see algorithms/RPPO/config/). Checkpoints go to checkpoints/rppo/, learning curves to
 # evaluation/curves/, the log to rl2_<job id>.log in the directory sbatch was called from.
 # Set CONDA_SH / CONDA_ENV if conda lives elsewhere.
@@ -23,5 +26,6 @@ export XLA_PYTHON_CLIENT_MEM_FRACTION=${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.90}
 python -c "import jax; d = jax.devices()[0]; assert d.platform == 'gpu', d; print('[rl2] GPU', d, flush=True)" \
     || { echo "[rl2] no GPU visible, abort"; exit 1; }
 echo "[rl2] $ENV $* host=$(hostname) $(date -u)"
-python algorithms/train.py --algo RPPO --env $ENV "$@"
-echo "[rl2] exit $? $(date -u)"
+python algorithms/train.py --algo RPPO --env $ENV "$@"; rc=$?
+echo "[rl2] exit $rc $(date -u)"
+exit $rc          # so a crashed run shows as FAILED in sacct, not COMPLETED
