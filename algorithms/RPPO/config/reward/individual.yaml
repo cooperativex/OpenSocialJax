@@ -1,7 +1,5 @@
 # @package _global_
-# Individual-reward variant: each agent gets its own reward (selfish baseline).
-ENV_KWARGS:
-  shared_rewards: False
+# Individual-reward variant: each agent is trained on its own reward, as the environment pays it (the social dilemma).
 REWARD: individual
 WANDB_TAGS:
   - INDIVIDUAL_REWARD

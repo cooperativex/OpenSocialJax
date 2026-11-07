@@ -19,7 +19,7 @@ import jax
 import jax.numpy as jnp
 import numpy as onp
 
-from algorithms.RPPO.rppo_cnn_open_cleanup import split_sequence_minibatches
+from algorithms.RPPO.rl2 import split_sequence_minibatches
 from algorithms.utils.networks import ActorCriticRNN, ScannedRNN
 
 # A toy observation layout: (kind, colour, agent-feature, held-tool) channel

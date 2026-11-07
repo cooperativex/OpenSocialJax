@@ -1,15 +1,8 @@
-"""Shared RPPO (recurrent RL^2 PPO) runner: single_run / tune glue, factored out of the 9 per-env files.
+"""Shared RPPO (recurrent RL^2 PPO) runner: single_run / tune glue for the per-env modules.
 
-Each algorithms/RPPO/rppo_cnn_<env>.py defines its own `make_train(config)` (the
-training loop, unchanged from the original per-env code) and then delegates to
-single_run() or tune() here, passing env-specific strings as kwargs:
-
-    @hydra.main(version_base=None, config_path="config", config_name="rppo_cnn_open_cleanup")
-    def main(config):
-        if config["TUNE"]:
-            tune(config, make_train, sweep_name="open_cleanup")
-        else:
-            single_run(config, make_train, wandb_name="rppo_cnn_open_cleanup")
+Each algorithms/RPPO/rppo_cnn_<env>.py defines `make_train(config)` (algorithms/RPPO/rl2.py's training loop on that
+environment), `build_env(config, on_train)` and its observation layout; algorithms/train.py hands them to
+single_run() or tune() here through the module's SINGLE_RUN_KWARGS / TUNE_KWARGS.
 """
 import copy
 from pathlib import Path
@@ -18,7 +11,6 @@ import jax
 from omegaconf import OmegaConf
 import wandb
 
-import opensocialjax
 from algorithms.utils import save_params, load_params, evaluate_rppo as evaluate
 
 
@@ -46,15 +38,18 @@ def _save_metrics(metrics, name):
     print(f"** Saved learning curves -> evaluation/curves/{name}.npz **")
 
 
-def single_run(config, make_train, *, wandb_name):
-    """One training run, saving + evaluating at the end."""
+def single_run(config, make_train, *, wandb_name, build_env, obs_layout):
+    """One training run, saving + evaluating at the end (a GIF of the policy on the held-out environment)."""
     config = OmegaConf.to_container(config)
 
-    # Reward suffix lets common/individual runs of the same env coexist on disk
-    # and in wandb. Hidden behind .get() so the runner still works for any
-    # legacy yaml that doesn't define REWARD.
+    # The suffix (reward, and OpenCleanup's training curriculum) lets runs of
+    # the same env coexist on disk and in wandb. Hidden behind .get() so the
+    # runner still works for any yaml that defines neither.
     reward = config.get("REWARD")
     suffix = f"_reward_{reward}" if reward else ""
+    dirt = config.get("TRAIN_INITIAL_DIRT", 1.0)      # OpenCleanup's training curriculum, if any
+    if isinstance(dirt, (list, tuple)):
+        suffix += f"_dirt{dirt[0]:g}-{dirt[1]:g}"
 
     wandb.init(
         entity=config["ENTITY"],
@@ -78,13 +73,11 @@ def single_run(config, make_train, *, wandb_name):
     # leaves no way to see when or how — which is exactly what happened.
     _save_metrics(out.get("metrics"), f"rppo_{filename}")
     train_state = jax.tree.map(lambda x: x[0], out["runner_state"][0])
-    save_path = f"./checkpoints/individual/{filename}.pkl"
     # RPPO is shared-policy only, so there is always exactly one checkpoint.
-    # NB: the 'indvidual' typo is the existing on-disk convention.
-    save_path = f"./checkpoints/indvidual/{filename}.pkl"
+    save_path = f"./checkpoints/rppo/{filename}.pkl"
     save_params(train_state, save_path)
     params = load_params(save_path)
-    evaluate(params, opensocialjax.make(config["ENV_NAME"], **config["ENV_KWARGS"]), save_path, config)
+    evaluate(params, build_env(config, on_train=False), save_path, config, obs_layout)
 
 
 def tune(default_config, make_train, *, sweep_name):

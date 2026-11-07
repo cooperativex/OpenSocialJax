@@ -1209,8 +1209,12 @@ class OpenCleanup(MultiAgentEnv):
                     angle: jnp.ndarray,
                 ) -> jnp.ndarray:
 
+                # Index conventions: on the grid agent k is the code k + len(Items) (`agent` is that code); x is the
+                # one-hot of grid - 1, so agent k is channel k + len(Items) - 1, and the agent in a cell whose hot
+                # channel is item_idx is item_idx - len(Items) + 1. (Reading x[agent] here once took agent k+1's
+                # channel as "self" -- JAX clamps the out-of-range index, so only the last agent saw itself.)
                 # get agent's one-hot
-                agent_element = jnp.array([jnp.int8(x[agent])])
+                agent_element = jnp.array([jnp.int8(x[agent - 1])])
 
                 # mask to check if any other agent exists there
                 mask = x[len(Items)-1:] > 0
@@ -1236,11 +1240,11 @@ class OpenCleanup(MultiAgentEnv):
                         state.freeze[
                             agent-len(Items)
                         ].max(axis=-1) > 0,
-                        item_idx >= len(Items)
+                        item_idx >= len(Items) - 1
                 )
 
                 show_inv_idxs = jnp.where(
-                    state.freeze[agent],
+                    state.freeze[agent - len(Items)],
                     size=12, # since, in a setting where simultaneous interac-
                     fill_value=-1 # -tions can happen, only a max of 12 can
                 )[0] # happen at once (zap logic), regardless of pop size
@@ -1249,11 +1253,11 @@ class OpenCleanup(MultiAgentEnv):
                     jnp.logical_or(
                         jnp.logical_and(
                             show_inv_bool,
-                            jnp.isin(item_idx-len(Items), show_inv_idxs),
+                            jnp.isin(item_idx - len(Items) + 1, show_inv_idxs),
                         ),
                         agent_element
                     ),
-                    state.agent_invs[item_idx - len(Items)],
+                    state.agent_invs[item_idx - len(Items) + 1],
                     jnp.array([0, 0], dtype=jnp.int8)
                 )[0]
 
@@ -1262,7 +1266,7 @@ class OpenCleanup(MultiAgentEnv):
                 frozen = jnp.where(
                     other_agent,
                     state.freeze[
-                        item_idx-len(Items)
+                        item_idx - len(Items) + 1
                     ].max(axis=-1) > 0,
                     0
                 )
@@ -1403,23 +1407,14 @@ class OpenCleanup(MultiAgentEnv):
                 - jnp.ndarray of new rotated grid.
 
             '''
-            grid = jnp.where(
-                agent_loc[2] == 1,
-                jnp.rot90(grid, k=1, axes=(0, 1)),
-                grid,
-            )
-            grid = jnp.where(
-                agent_loc[2] == 2,
-                jnp.rot90(grid, k=2, axes=(0, 1)),
-                grid,
-            )
-            grid = jnp.where(
-                agent_loc[2] == 3,
-                jnp.rot90(grid, k=3, axes=(0, 1)),
-                grid,
-            )
-
-            return grid
+            # Ahead is always up (and the agent's right on the right): facing 0 (row + 1) the raw window has ahead at
+            # the bottom, so it takes a half turn; 1 (col + 1) a quarter turn anticlockwise; 2 (row - 1) is already
+            # upright; 3 (col - 1) three quarter turns. The agent then sits at (OBS_SIZE - 2, OBS_SIZE // 2) whatever
+            # it faces. (Facings 0 and 2 used to be swapped, which turned those two views upside down.)
+            d = agent_loc[2]
+            return jnp.where(d == 0, jnp.rot90(grid, k=2, axes=(0, 1)),
+                             jnp.where(d == 1, jnp.rot90(grid, k=1, axes=(0, 1)),
+                                       jnp.where(d == 3, jnp.rot90(grid, k=3, axes=(0, 1)), grid)))
 
         def _get_obs_point(agent_loc: jnp.ndarray) -> jnp.ndarray:
             '''

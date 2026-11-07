@@ -64,6 +64,7 @@ class State:
     ripen_len: jnp.ndarray      # (num_apple_cells,) int16: steps per ripeness stage of the apple on this cell, drawn from ripen_range when it grew (2026-09-19)
     zap_cd: jnp.ndarray         # (num_agents,) int16: steps left before this agent may fire again (Melting Pot cooldownTime)
     zap_wait: jnp.ndarray       # (num_agents,) int16: steps left on the spawn cell after being zapped, unable to act (Melting Pot framesTillRespawn)
+    layout_id: jnp.ndarray      # () int16: index of the map in layout_pool this meta-episode plays on (0 without a pool)
 
 @chex.dataclass
 class EnvParams:
@@ -425,6 +426,9 @@ class OpenHarvest(MultiAgentEnv):
         fixed_patch_hues=None,   # (num_slots,) hue per patch slot to pin the draw (tests, oracles); slot = index of the letter in RYGCMS
         patch_hues_with_replacement=False,   # draw each slot's hue independently (two patches can share a hue, a hue can be absent);
                                              # needed for maps with more patches than hues. Default: distinct hues, as before.
+        layout_pool=None,        # random maps: a LayoutPool (layouts.py / layouts_orig6.py). One map is drawn per meta-episode and kept across
+                                 # its trials; tree cells, patch slots and spawn cells come from it instead of map_ASCII (which then only
+                                 # fixes the grid size). None = the fixed map, bit-identical to before.
     ):
 
         super().__init__(num_agents=num_agents)
@@ -516,6 +520,28 @@ class OpenHarvest(MultiAgentEnv):
         self.SPAWNS_PLAYERS = find_positions(nums_map, 4)
         assert len(self.SPAWNS_PLAYERS) >= num_agents, "need at least num_agents spawn cells for occupancy-aware respawn"
         self.SPAWNS_WALL = find_positions(nums_map, 1)
+
+        self.layout_pool = layout_pool
+        if layout_pool is not None:
+            assert tuple(layout_pool.grid_shape) == (self.GRID_SIZE_ROW, self.GRID_SIZE_COL), (layout_pool.grid_shape, grid_size)
+            self._LP = {k: jnp.asarray(layout_pool.arrays[k], dtype=jnp.int32) for k in ("apple", "slot", "spawns")}
+            # layout 0 stands in for the static arrays (every layout has the same number of trees and of spawn cells)
+            self.SPAWNS_APPLE, self.APPLE_SLOTS, self.SPAWNS_PLAYERS = self._LP["apple"][0], self._LP["slot"][0], self._LP["spawns"][0]
+            self.SPAWNS_PLAYER_IN = jnp.zeros((0, 2), dtype=jnp.int32)
+            self.SPAWNS_WALL = jnp.zeros((0, 2), dtype=jnp.int32)
+            self.NUM_SLOTS = int(onp.asarray(self._LP["slot"]).max()) + 1
+            assert self.NUM_SLOTS <= NUM_HARVEST_HUES or self.patch_hues_with_replacement or fixed_patch_hues is not None, \
+                "more patch slots than hues: draw the hues with replacement (or pin them)"
+            assert len(self.SPAWNS_PLAYERS) >= num_agents, "need at least num_agents spawn cells for occupancy-aware respawn"
+        self._layout_host_cache = {}
+
+        def _layout(layout_id):
+            """Tree cells, their patch slots and the spawn cells of the map a state plays on (traced; the static arrays
+            without a pool)."""
+            if self.layout_pool is None:
+                return dict(apple=self.SPAWNS_APPLE, slot=self.APPLE_SLOTS, spawns=self.SPAWNS_PLAYERS)
+            return dict(apple=self._LP["apple"][layout_id], slot=self._LP["slot"][layout_id], spawns=self._LP["spawns"][layout_id])
+        self._layout = _layout
 
 
         def rand_interaction(
@@ -716,8 +742,12 @@ class OpenHarvest(MultiAgentEnv):
                     angle: jnp.ndarray,
                 ) -> jnp.ndarray:
 
+                # Index conventions: on the grid agent k is the code k + len(Items) (`agent` is that code); x is the
+                # one-hot of grid - 1, so agent k is channel k + len(Items) - 1, and the agent in a cell whose hot
+                # channel is item_idx is item_idx - len(Items) + 1. (Reading x[agent] here once took agent k+1's
+                # channel as "self" -- JAX clamps the out-of-range index, so only the last agent saw itself.)
                 # get agent's one-hot
-                agent_element = jnp.array([jnp.int8(x[agent])])
+                agent_element = jnp.array([jnp.int8(x[agent - 1])])
 
                 # mask to check if any other agent exists there
                 mask = x[len(Items)-1:] > 0
@@ -743,11 +773,11 @@ class OpenHarvest(MultiAgentEnv):
                         state.freeze[
                             agent-len(Items)
                         ].max(axis=-1) > 0,
-                        item_idx >= len(Items)
+                        item_idx >= len(Items) - 1
                 )
 
                 show_inv_idxs = jnp.where(
-                    state.freeze[agent],
+                    state.freeze[agent - len(Items)],
                     size=12, # since, in a setting where simultaneous interac-
                     fill_value=-1 # -tions can happen, only a max of 12 can
                 )[0] # happen at once (zap logic), regardless of pop size
@@ -756,11 +786,11 @@ class OpenHarvest(MultiAgentEnv):
                     jnp.logical_or(
                         jnp.logical_and(
                             show_inv_bool,
-                            jnp.isin(item_idx-len(Items), show_inv_idxs),
+                            jnp.isin(item_idx - len(Items) + 1, show_inv_idxs),
                         ),
                         agent_element
                     ),
-                    state.agent_invs[item_idx - len(Items)],
+                    state.agent_invs[item_idx - len(Items) + 1],
                     jnp.array([0, 0], dtype=jnp.int8)
                 )[0]
 
@@ -769,7 +799,7 @@ class OpenHarvest(MultiAgentEnv):
                 frozen = jnp.where(
                     other_agent,
                     state.freeze[
-                        item_idx-len(Items)
+                        item_idx - len(Items) + 1
                     ].max(axis=-1) > 0,
                     0
                 )
@@ -871,23 +901,14 @@ class OpenHarvest(MultiAgentEnv):
                 - jnp.ndarray of new rotated grid.
 
             '''
-            grid = jnp.where(
-                agent_loc[2] == 1,
-                jnp.rot90(grid, k=1, axes=(0, 1)),
-                grid,
-            )
-            grid = jnp.where(
-                agent_loc[2] == 2,
-                jnp.rot90(grid, k=2, axes=(0, 1)),
-                grid,
-            )
-            grid = jnp.where(
-                agent_loc[2] == 3,
-                jnp.rot90(grid, k=3, axes=(0, 1)),
-                grid,
-            )
-
-            return grid
+            # Ahead is always up (and the agent's right on the right): facing 0 (row + 1) the raw window has ahead at
+            # the bottom, so it takes a half turn; 1 (col + 1) a quarter turn anticlockwise; 2 (row - 1) is already
+            # upright; 3 (col - 1) three quarter turns. The agent then sits at (OBS_SIZE - 2, OBS_SIZE // 2) whatever
+            # it faces. (Facings 0 and 2 used to be swapped, which turned those two views upside down.)
+            d = agent_loc[2]
+            return jnp.where(d == 0, jnp.rot90(grid, k=2, axes=(0, 1)),
+                             jnp.where(d == 1, jnp.rot90(grid, k=1, axes=(0, 1)),
+                                       jnp.where(d == 3, jnp.rot90(grid, k=3, axes=(0, 1)), grid)))
 
         def _get_obs_point(agent_loc: jnp.ndarray) -> jnp.ndarray:
             '''
@@ -1293,6 +1314,9 @@ class OpenHarvest(MultiAgentEnv):
             #     actions
             # )
 
+            L = _layout(state.layout_id)
+            apple_cells = L["apple"]
+
             # regrow apple (vanilla neighbour counting; any hue/stage counts as an apple)
             grid_apple = state.grid
             ga = is_apple(grid_apple)
@@ -1316,7 +1340,7 @@ class OpenHarvest(MultiAgentEnv):
                 
                 return apple_nums
 
-            near_apple_nums = jax.vmap(count_apple)(self.SPAWNS_APPLE)
+            near_apple_nums = jax.vmap(count_apple)(apple_cells)
             
             # grid_apple = state.grid
 
@@ -1339,17 +1363,17 @@ class OpenHarvest(MultiAgentEnv):
                 new_len = jnp.where(grows, ripen_draw, ripen_len)                   # a new apple draws its own steps per stage
                 return new_cell.astype(jnp.int16), new_age.astype(jnp.int16), new_last.astype(jnp.int8), new_len.astype(jnp.int16)
 
-            prob = jax.random.uniform(key, shape=(len(self.SPAWNS_APPLE),))
+            prob = jax.random.uniform(key, shape=(len(apple_cells),))
             # the per-apple draws use fold_in so the existing random stream is untouched: with degenerate ranges the env replays old logs bit for bit
-            ripen_draw = jax.random.randint(jax.random.fold_in(key, 11), (len(self.SPAWNS_APPLE),), self.ripen_lo, self.ripen_hi + 1)
-            rot_draw = jax.random.randint(jax.random.fold_in(key, 12), (len(self.SPAWNS_APPLE),), self.rot_lo, self.rot_hi + 1)
-            new_apple, new_age, new_last, new_len = jax.vmap(regrow_apple)(self.SPAWNS_APPLE, near_apple_nums, prob, cell_rate, state.cell_hues, state.age, state.last_stage,
+            ripen_draw = jax.random.randint(jax.random.fold_in(key, 11), (len(apple_cells),), self.ripen_lo, self.ripen_hi + 1)
+            rot_draw = jax.random.randint(jax.random.fold_in(key, 12), (len(apple_cells),), self.rot_lo, self.rot_hi + 1)
+            new_apple, new_age, new_last, new_len = jax.vmap(regrow_apple)(apple_cells, near_apple_nums, prob, cell_rate, state.cell_hues, state.age, state.last_stage,
                                                                            state.ripen_len, ripen_draw, rot_draw)
             # a cell currently under an agent keeps the agent code (its apple was eaten on arrival)
-            under_agent = grid_apple[self.SPAWNS_APPLE[:, 0], self.SPAWNS_APPLE[:, 1]] >= len(Items)
-            new_apple = jnp.where(under_agent, grid_apple[self.SPAWNS_APPLE[:, 0], self.SPAWNS_APPLE[:, 1]], new_apple)
+            under_agent = grid_apple[apple_cells[:, 0], apple_cells[:, 1]] >= len(Items)
+            new_apple = jnp.where(under_agent, grid_apple[apple_cells[:, 0], apple_cells[:, 1]], new_apple)
             new_age = jnp.where(under_agent, jnp.where(state.age < 0, jnp.minimum(state.age + 1, -1), 0), new_age)   # an occupied cell keeps its rot countdown (held at -1 until free)
-            new_apple_grid = grid_apple.at[self.SPAWNS_APPLE[:, 0], self.SPAWNS_APPLE[:, 1]].set(new_apple[:])
+            new_apple_grid = grid_apple.at[apple_cells[:, 0], apple_cells[:, 1]].set(new_apple[:])
             state = state.replace(grid=new_apple_grid, age=new_age, last_stage=new_last, ripen_len=jnp.where(under_agent, state.ripen_len, new_len))
 
             # moving all agents
@@ -1418,7 +1442,7 @@ class OpenHarvest(MultiAgentEnv):
             eaten_cell = jnp.zeros((self.GRID_SIZE_ROW, self.GRID_SIZE_COL), dtype=bool).at[new_locs[:, 0], new_locs[:, 1]].set(True)
             ate_grid = jnp.zeros((self.GRID_SIZE_ROW, self.GRID_SIZE_COL), dtype=bool).at[new_locs[:, 0], new_locs[:, 1]].set(apple_matches.reshape(-1))
             stage_grid = jnp.zeros((self.GRID_SIZE_ROW, self.GRID_SIZE_COL), dtype=jnp.int8).at[new_locs[:, 0], new_locs[:, 1]].set(picked_stage.astype(jnp.int8))
-            sp_r, sp_c = self.SPAWNS_APPLE[:, 0], self.SPAWNS_APPLE[:, 1]
+            sp_r, sp_c = apple_cells[:, 0], apple_cells[:, 1]
             state = state.replace(age=jnp.where(eaten_cell[sp_r, sp_c], 0, state.age),
                                   last_stage=jnp.where(ate_grid[sp_r, sp_c], stage_grid[sp_r, sp_c], state.last_stage))
 
@@ -1467,7 +1491,7 @@ class OpenHarvest(MultiAgentEnv):
             # cells not occupied by any survivor, so no overlap is possible.
             key, respawn_key = jax.random.split(key)
             new_re_locs = resolve_respawn(
-                respawn_key, new_locs, reborn_players.astype(bool), self.SPAWNS_PLAYERS
+                respawn_key, new_locs, reborn_players.astype(bool), L["spawns"]
             )
             state = state.replace(reborn_locs=new_re_locs)
 
@@ -1551,6 +1575,7 @@ class OpenHarvest(MultiAgentEnv):
                 ripen_len=state.ripen_len,
                 zap_cd=state.zap_cd,
                 zap_wait=state.zap_wait,
+                layout_id=state.layout_id,
             )
 
             # now calculate if done for inner or outer episode
@@ -1558,8 +1583,8 @@ class OpenHarvest(MultiAgentEnv):
             outer_t = state_nxt.outer_t
             reset_inner = inner_t == num_inner_steps
 
-            # trial boundary: re-lay the orchard, keep the hidden rules and the value table
-            state_re = _reset_state(key, state_nxt.rule_encoding, state_nxt.values, state_nxt.cell_hues)
+            # trial boundary: re-lay the orchard, keep the hidden rules, the value table and the map
+            state_re = _reset_state(key, state_nxt.rule_encoding, state_nxt.values, state_nxt.cell_hues, state_nxt.layout_id)
 
             state_re = state_re.replace(outer_t=outer_t + 1)
             state = jax.tree.map(
@@ -1590,8 +1615,13 @@ class OpenHarvest(MultiAgentEnv):
             )
 
         def _reset_state(
-            key: jnp.ndarray, rule_encoding=None, values=None, cell_hues=None
+            key: jnp.ndarray, rule_encoding=None, values=None, cell_hues=None, layout_id=None
         ) -> State:
+            if self.layout_pool is None:
+                layout_id = jnp.int16(0)
+            elif layout_id is None:   # own key stream (fold_in), so every draw below is the same as without a pool
+                layout_id = jax.random.randint(jax.random.fold_in(key, 0x1A7), (), 0, self.layout_pool.size).astype(jnp.int16)
+            L = _layout(layout_id)
             key, subkey, rule_key, value_key = jax.random.split(key, 4)
             hue_key = jax.random.fold_in(value_key, 7)          # separate stream; leaves the existing key split untouched
             if cell_hues is None:
@@ -1603,8 +1633,8 @@ class OpenHarvest(MultiAgentEnv):
                     slot_hues = jax.random.permutation(hue_key, self.num_hues)[: self.NUM_SLOTS]
                 else:
                     slot_hues = jnp.arange(self.NUM_SLOTS, dtype=jnp.int32)
-                cell_hues = jnp.asarray(slot_hues, dtype=jnp.int32)[self.APPLE_SLOTS]
-            ripen_len0 = jax.random.randint(jax.random.fold_in(key, 13), (len(self.SPAWNS_APPLE),), self.ripen_lo, self.ripen_hi + 1).astype(jnp.int16)
+                cell_hues = jnp.asarray(slot_hues, dtype=jnp.int32)[L["slot"]]
+            ripen_len0 = jax.random.randint(jax.random.fold_in(key, 13), (len(L["apple"]),), self.ripen_lo, self.ripen_hi + 1).astype(jnp.int16)
             if rule_encoding is None:
                 if self.fixed_rules is not None:
                     from opensocialjax.environments.discovery_rules import encode_harvest_ruleset
@@ -1630,11 +1660,11 @@ class OpenHarvest(MultiAgentEnv):
             # inside_players_pos and could seat two agents on one cell).
             key, subkey2 = jax.random.split(key)
             inside_players_pos = jax.random.permutation(subkey, self.SPAWNS_PLAYER_IN)
-            outside_players_pos = jax.random.permutation(subkey2, self.SPAWNS_PLAYERS)
+            outside_players_pos = jax.random.permutation(subkey2, L["spawns"])
             agent_pos = jnp.concatenate((inside_players_pos, outside_players_pos))[:num_agents]
             wall_pos = self.SPAWNS_WALL
 
-            apple_pos = self.SPAWNS_APPLE
+            apple_pos = L["apple"]
 
             grid = grid.at[
                 apple_pos[:, 0],
@@ -1682,10 +1712,11 @@ class OpenHarvest(MultiAgentEnv):
                 rule_encoding=jnp.asarray(rule_encoding, dtype=jnp.uint8),
                 values=jnp.asarray(values, dtype=jnp.uint8),
                 cell_hues=jnp.asarray(cell_hues, dtype=jnp.int32),
-                last_stage=jnp.zeros((len(self.SPAWNS_APPLE),), dtype=jnp.int8),
+                last_stage=jnp.zeros((len(L["apple"]),), dtype=jnp.int8),
                 ripen_len=ripen_len0,
                 zap_cd=jnp.zeros((num_agents,), dtype=jnp.int16),
                 zap_wait=jnp.zeros((num_agents,), dtype=jnp.int16),
+                layout_id=layout_id,
             )
 
         def reset(
@@ -1707,6 +1738,14 @@ class OpenHarvest(MultiAgentEnv):
             self.reset = reset
             self.get_obs_point = _get_obs_point
         ################################################################################
+
+    def layout_arrays(self, state):
+        """Host-side (numpy) arrays of the map `state` plays on: apple (tree cells, row-major), slot (patch slot of each
+        tree) and spawns. Cached per layout."""
+        lid = int(onp.asarray(state.layout_id)) if self.layout_pool is not None else 0
+        if lid not in self._layout_host_cache:
+            self._layout_host_cache[lid] = {k: onp.asarray(v) for k, v in self._layout(lid).items()}
+        return self._layout_host_cache[lid]
 
     @property
     def name(self) -> str:

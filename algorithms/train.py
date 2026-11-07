@@ -4,6 +4,7 @@ Usage:
     python algorithms/train.py --algo IPPO --env open_cleanup
     python algorithms/train.py --algo IPPO --env open_cleanup SEED=42 NUM_ENVS=128 reward=individual
     python algorithms/train.py --algo RPPO --env open_cleanup
+    python algorithms/train.py --algo RPPO --env open_harvest reward=common
 
 Per-env modules (e.g. algorithms/IPPO/ippo_cnn_open_cleanup.py) expose:
     - make_train(config)              the family training loop, unchanged from

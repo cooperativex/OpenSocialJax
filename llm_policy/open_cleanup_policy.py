@@ -312,17 +312,21 @@ MINI_MAP = [
 
 
 def make_env(agents=3, inner=200, outer=4, spawn=0.1, skew=0.8, on_train=False, apple_threshold=None,
-             tools="shared", layouts="fixed", problem=None):
+             tools="shared", layouts="fixed", problem=None, report_beam=True, initial_dirt=1.0):
     """The evaluated game: held-out recipes (or the training split), mini map,
     attribute-craft with 4 base tools and 2-pickup recipes, explicit pick-up, individual rewards (the only kind).
     apple_threshold: river dirt fraction below which apples can grow (env default 0.4); 1.0 = growth rate
-    scales with cleanliness from the first cleared cell."""
+    scales with cleanliness from the first cleared cell.
+    report_beam: the env's verdict on every beam target in `info` (the harness's rule ledger reads it); it changes
+    nothing in the game, and RL training turns it off (its info leaves are not one value per agent).
+    initial_dirt: the fraction of the river's waste cells that open dirty. The evaluated game is 1.0; RL training's
+    curriculum passes a (lo, hi) range, drawn per trial."""
     from opensocialjax.environments.held_out import held_out_env
     global TOOLS
     assert tools in ("shared", "per-colour"), tools
     TOOLS = tools
     extra = {} if apple_threshold is None else {"thresholdDepletion": float(apple_threshold)}
-    extra["report_beam"] = True      # the rule ledger is built from the environment's own verdict on each shot
+    extra["report_beam"] = bool(report_beam)      # the rule ledger is built from the environment's own verdict on each shot
     if tools == "per-colour":
         extra["per_colour_tools"] = True
     if layouts == "random":      # a map drawn per meta-episode from the held-out (or training) 20 % of the layout pool
@@ -333,6 +337,7 @@ def make_env(agents=3, inner=200, outer=4, spawn=0.1, skew=0.8, on_train=False, 
         extra["layout_pool"] = extra["layout_pool"].subset([problem["layout"]])
         extra["fixed_dom_type"] = problem["hue"]
     env = held_out_env(num_agents=agents, skewed_waste=True, waste_skew=skew, dirtSpawnProbability=spawn, **extra,
+                       initial_dirt=initial_dirt,
                        map_ASCII=MINI_MAP, tool_row=6, chain_depth=1, num_inner_steps=inner, num_outer_steps=outer,
                        on_train=on_train, dom_hue_per_episode=True,
                        attr_rules=True, craft_rules=True, craft_tools=4, craft_len=2, explicit_pickup=True)

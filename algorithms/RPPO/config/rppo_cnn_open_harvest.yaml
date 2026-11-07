@@ -1,0 +1,22 @@
+# RPPO (recurrent RL^2) on OpenHarvest, the game of experiments/open_harvest_5ag.
+defaults:
+  - rppo_base
+  - _self_
+  - reward: individual  # override on the CLI: reward=common
+
+"ENV_NAME": "open_harvest"
+
+# Arguments of llm_policy.open_harvest_policy.make_env, as experiments/open_harvest_5ag/config.json sets them:
+# 5 agents, 5 trials x 300 steps, ripeness stages of 15-20 steps, rotted cells regrow after 2-5 steps, regrowth
+# speeds x2 / x1 / x0.5, a zapped agent waits 12 steps. layouts=random draws the map per meta-episode from the
+# orig6 pool (the harness plays one map per seed). on_train is set by the trainer.
+"ENV_KWARGS":
+  "agents": 5
+  "inner": 300
+  "outer": 5
+  "ripen": 25
+  "respawn_wait": 12
+  "ripen_range": [15, 20]
+  "rot_range": [2, 5]
+  "rates": [2.0, 1.0, 0.5]
+  "layouts": "random"

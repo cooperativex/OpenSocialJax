@@ -451,7 +451,9 @@ class ActorCriticRNN(nn.Module):
     head_hidden_size: int = 256
     # (kind, colour, agent-feature, held-tool) channel counts — the default
     # is open_cleanup's layout: 10 non-empty kinds, NUM_COLORS colours,
-    # 10 agent features, NUM_COLORS held-tool channels
+    # 10 agent features, NUM_COLORS held-tool channels. A 0 drops that axis:
+    # open_harvest has no colour axis (its item one-hot already names hue
+    # and ripeness) and holds nothing, so it is (item channels, 0, 10, 0).
     obs_layout: Sequence[int] = (10, 10, 10, 10)
     aux: bool = False
 
@@ -472,11 +474,11 @@ class ActorCriticRNN(nn.Module):
         held = cells[:, 0, 0, n_kind + n_col + n_feat:]
 
         # EmbeddingEncoder: one embedding per axis, concatenated per cell
-        emb = jnp.concatenate([
-            nn.Dense(self.obs_emb_dim, name="kind_emb")(kind),
-            nn.Dense(self.obs_emb_dim, name="colour_emb")(colour),
-            nn.Dense(self.obs_emb_dim, name="feat_emb")(feats),
-        ], axis=-1)
+        emb = [nn.Dense(self.obs_emb_dim, name="kind_emb")(kind)]
+        if n_col:
+            emb.append(nn.Dense(self.obs_emb_dim, name="colour_emb")(colour))
+        emb.append(nn.Dense(self.obs_emb_dim, name="feat_emb")(feats))
+        emb = jnp.concatenate(emb, axis=-1)
         h = emb
         for width in (16, 32, 64):
             h = nn.Conv(width, (2, 2), padding="VALID",
@@ -484,14 +486,17 @@ class ActorCriticRNN(nn.Module):
             h = nn.relu(h)
         obs_emb = h.reshape(t, b, -1)
 
-        held_emb = nn.Dense(self.action_embed_dim, name="held_emb")(
-            held).reshape(t, b, -1)
         act_emb = nn.Embed(
             num_embeddings=self.action_dim, features=self.action_embed_dim,
         )(prev_action.astype(jnp.int32))
 
-        rnn_in = jnp.concatenate(
-            [obs_emb, held_emb, act_emb, prev_reward[..., None]], axis=-1)
+        if n_held:
+            held_emb = nn.Dense(self.action_embed_dim, name="held_emb")(
+                held).reshape(t, b, -1)
+            rnn_in = [obs_emb, held_emb, act_emb, prev_reward[..., None]]
+        else:
+            rnn_in = [obs_emb, act_emb, prev_reward[..., None]]
+        rnn_in = jnp.concatenate(rnn_in, axis=-1)
         hstate, rnn_out = ScannedRNN(self.hidden_size)(hstate, (rnn_in, resets))
 
         def head(out_dim, final_scale, name):

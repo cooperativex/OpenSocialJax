@@ -1,7 +1,6 @@
 # @package _global_
-# Common-reward variant: all agents share a single, summed reward.
-ENV_KWARGS:
-  shared_rewards: True
+# Common-reward variant: every agent is trained on the sum of the rewards of all agents in its environment.
+# Applied by the training loop (algorithms/RPPO/rl2.py); the environments themselves only pay individual rewards.
 REWARD: common
 WANDB_TAGS:
   - COMMON_REWARD

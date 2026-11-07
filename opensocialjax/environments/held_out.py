@@ -12,9 +12,10 @@ import opensocialjax
 from opensocialjax.environments.rule_benchmark import build_benchmark
 
 
-def held_out_env(split=0.8, split_seed=0, chain_depth=1, bijective=False, on_train=False, **env_kwargs):
+def held_out_env(split=0.8, split_seed=0, chain_depth=1, bijective=False, on_train=False, initial_dirt=1.0, **env_kwargs):
     """OpenCleanup with rules from the held-out (or training) split, and the river fully polluted at the start
-    (initial_dirt=1.0), so no trial scores before the rule matters."""
+    (initial_dirt=1.0), so no trial scores before the rule matters. A (lo, hi) initial_dirt draws the fraction per
+    trial instead: RL training's curriculum (evaluation and the LLM agents keep 1.0)."""
     bench = build_benchmark(chain_depth=chain_depth, bijective=bijective,
                             craft=bool(env_kwargs.get("craft_rules", False)),
                             craft_tools=int(env_kwargs.get("craft_tools", 4)),
@@ -27,8 +28,8 @@ def held_out_env(split=0.8, split_seed=0, chain_depth=1, bijective=False, on_tra
         env_kwargs["bijective_rules"] = True
     train_rules, test_rules = bench.shuffle(jax.random.PRNGKey(split_seed)).split(split)
     pool = train_rules if on_train else test_rules
-    print(f"[{'train split' if on_train else 'held-out'}] {pool.size} rules, initial_dirt=1.0")
-    return opensocialjax.make("open_cleanup", rule_pool=pool, initial_dirt=1.0, **env_kwargs)
+    print(f"[{'train split' if on_train else 'held-out'}] {pool.size} rules, initial_dirt={initial_dirt}")
+    return opensocialjax.make("open_cleanup", rule_pool=pool, initial_dirt=initial_dirt, **env_kwargs)
 
 
 def held_out_harvest_env(split=0.8, split_seed=0, on_train=False, **env_kwargs):

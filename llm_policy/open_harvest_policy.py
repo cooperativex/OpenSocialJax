@@ -71,14 +71,19 @@ MINI_MAP = [
 
 
 def make_env(agents=3, inner=500, outer=10, ripen=25, on_train=False, layout=0, respawn_wait=12,
-             ripen_range=(15, 20), rot_range=(2, 5), rates=None):
+             ripen_range=(15, 20), rot_range=(2, 5), rates=None, layouts="fixed"):
     """The game the harness plays (the baseline since 2026-09-24): the original Commons Harvest map, 16 x 22 with six
     patches (four diamonds, two quarter diamonds, 64 trees), each patch's colour drawn at random with replacement,
     map number `layout` of the held-out (with on_train, the training) pool in layouts_orig6.py; pick_layout(seed) is
-    the map a seed plays on. Individual rewards (the only kind)."""
+    the map a seed plays on. Individual rewards (the only kind).
+    layouts="random": a map drawn per meta-episode from that whole split instead (`layout` is then ignored), for training
+    and evaluating policies across maps; the harness itself always plays one map per seed."""
     from opensocialjax.environments.open_harvest.layouts_orig6 import layout_split
-    return _harvest_env(layout_split(on_train).map_ascii(layout), agents, inner, outer, ripen, on_train, respawn_wait,
-                        ripen_range, rot_range, rates, patch_hues_with_replacement=True)
+    assert layouts in ("fixed", "random"), layouts
+    pool = layout_split(on_train)
+    extra = {"layout_pool": pool} if layouts == "random" else {}
+    return _harvest_env(pool.map_ascii(0 if layouts == "random" else layout), agents, inner, outer, ripen, on_train, respawn_wait,
+                        ripen_range, rot_range, rates, patch_hues_with_replacement=True, **extra)
 
 
 POOL = "orig6"                               # the map pool make_env draws from; recorded with every run's results

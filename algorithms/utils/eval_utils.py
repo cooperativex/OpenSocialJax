@@ -223,20 +223,18 @@ def evaluate_mappo_style(params, env, save_path, config, use_actor_only=True):
         wandb.log({"Episode GIF": wandb.Video(gif_path, caption="Evaluation Episode", format="gif")})
 
 
-def _obs_layout():
-    from opensocialjax.environments.open_cleanup.open_cleanup import NUM_COLORS, NUM_KINDS
-    return (NUM_KINDS - 1, NUM_COLORS, 10, NUM_COLORS)
-
-
-def evaluate_rppo(params, env, save_path, config):
+def evaluate_rppo(params, env, save_path, config, obs_layout):
     """Evaluation for recurrent (RL^2) policies.
 
     Same GIF output as the feed-forward evaluators, but the hidden state has
     to be carried between frames and the policy fed its previous action and
     reward — a recurrent agent evaluated statelessly would look untrained.
     The rollout is not reset between trials, which is the point: memory built
-    up in trial 1 is what should make trial 2 better.
+    up in trial 1 is what should make trial 2 better. `obs_layout` is the
+    environment's channel layout (see ActorCriticRNN); with REWARD=common the
+    previous reward fed back is the team's, as in training.
     """
+    from algorithms.RPPO.rl2 import training_reward
     from algorithms.utils.networks import ActorCriticRNN, ScannedRNN
 
     rng = jax.random.PRNGKey(0)
@@ -266,7 +264,7 @@ def evaluate_rppo(params, env, save_path, config):
         activation=config.get("ACTIVATION", "relu"),
         hidden_size=config.get("RNN_HIDDEN_SIZE", 128),
         head_hidden_size=config.get("HEAD_HIDDEN_SIZE", 64),
-        obs_layout=_obs_layout(),
+        obs_layout=tuple(obs_layout),
         aux=float(config.get("AUX_COEF", 0.0)) > 0.0,
     )
     apply_fn = jax.jit(network.apply)
@@ -293,7 +291,8 @@ def evaluate_rppo(params, env, save_path, config):
             _rng, state, [int(a) for a in action]
         )
         prev_action = action
-        prev_reward = jnp.asarray(reward).reshape(-1)[:n_agents]
+        prev_reward = training_reward(jnp.asarray(reward, dtype=jnp.float32).reshape(-1)[:n_agents],
+                                      config.get("REWARD", "individual"))
         last_done = jnp.full(n_agents, bool(done["__all__"]))
 
         pics.append(env.render(state))
