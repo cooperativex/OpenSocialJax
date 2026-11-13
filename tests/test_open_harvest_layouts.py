@@ -87,3 +87,21 @@ def test_every_map_of_the_split_is_drawn_and_laid_out_on_its_cells():
             assert len(set(agents)) == AGENTS and all(p in spawns for p in agents)
             assert {k: onp.asarray(v).tolist() for k, v in env.layout_arrays(jax.tree.map(lambda x: x[j], st)).items()} == \
                 {k: pool.arrays[k][lid[j]].tolist() for k in ("apple", "slot", "spawns")}
+
+
+def test_the_v2_pool_regenerates_bit_for_bit_and_keeps_the_invariants():
+    from opensocialjax.environments.open_harvest import layouts_orig6 as L
+    pool = L.default_pool(version=2)
+    grids, stats = L.generate(L.POOL_SIZE, L.POOL_SEED, version=2)
+    regen = L._to_pool(grids)
+    for k, v in pool.arrays.items():
+        assert onp.array_equal(regen.arrays[k], v), f"the cached v2 pool's {k} differs from a fresh build"
+    assert stats["accepted"] / stats["tries"] > 0.8, stats
+    for i in range(pool.size):
+        m = L.metrics(pool.char_grid(i))
+        assert m["neighbours"] == L.REFERENCE["neighbours"] and m["patch_sizes"] == L.REFERENCE["patch_sizes"]
+        assert m["trees"] == L.N_TREES and m["spawns"] == L.N_SPAWN
+        assert m["min_patch_separation"] >= L.MIN_PATCH_GAP and m["spawn_to_tree"] >= L.MIN_SPAWN_TO_TREE
+        assert len({int(r) for r, _ in pool.arrays["spawns"][i]}) == 1, "the spawn cells are one straight run"
+    assert L.VERSION == 1 and onp.array_equal(L.layout_split().arrays["apple"], L.layout_split(version=1).arrays["apple"]), \
+        "the default pool must stay v1 (the paper's maps)"

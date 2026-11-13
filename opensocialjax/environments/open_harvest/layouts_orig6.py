@@ -17,10 +17,19 @@ Invariants, all exact:
   N_SPAWN spawn cells in a straight run, at least MIN_SPAWN_TO_TREE (4) away from every tree -- the original map's
   own distance (its bottom spawn row is 4 from the two middle diamonds)
 
-    python -m opensocialjax.environments.open_harvest.layouts_orig6    # (re)build the cached pool, print stats
+Two generators, each with its own cached pool; the pool of the paper's experiments (and the default everywhere) is v1.
+  v1  the patches first, each at a random spot (200 tries), then a spawn run where one fits. A 20-cell run on a
+      22-wide map 4 away from every tree needs a tree-free strip along an edge, which random patches rarely leave:
+      about 0.6 % of the tries are kept, and the kept maps all have the run on an edge row.
+  v2  the spawn run first, on the top or the bottom row, then each patch drawn uniformly from every position and
+      orientation that keeps the distances. Same kind of map; about 87 % of the tries are kept (the rest are maps where
+      the first patches leave no room for the last one; such a try is started again from scratch).
+
+    python -m opensocialjax.environments.open_harvest.layouts_orig6 [--version 2]   # (re)build a cached pool, print stats
 """
 from __future__ import annotations
 
+import argparse
 import os
 
 import numpy as np
@@ -30,9 +39,17 @@ from opensocialjax.environments.open_harvest.layouts import ORIENTATIONS, Layout
 H, W = 16, 22
 SHAPES = ("diamond", "diamond", "diamond", "diamond", "quarter", "quarter")
 SLOT_LETTERS = "RYGCMS"                  # one slot per patch, as the env's map parser reads them (index into RYGCMS)
-N_TREES, N_SPAWN, MIN_SPAWN_TO_TREE = 64, 20, 4
-POOL_SIZE, POOL_SEED, VERSION = 256, 0, 1
-CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), f"layouts_orig6_v{VERSION}.npz")
+N_TREES, N_SPAWN, MIN_SPAWN_TO_TREE, MIN_PATCH_GAP = 64, 20, 4, 3
+POOL_SIZE, POOL_SEED, VERSION = 256, 0, 1   # VERSION: the default pool
+VERSIONS = (1, 2)
+
+
+def cache_path(version=VERSION):
+    assert version in VERSIONS, version
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), f"layouts_orig6_v{version}.npz")
+
+
+CACHE = cache_path(VERSION)
 
 ORIG6_MAP = [
     "RRR    Y      G    CCC",
@@ -122,17 +139,60 @@ def generate_one(rng):
     return g
 
 
-def generate(n, seed=POOL_SEED, max_tries=2_000_000):
+def _near(cells, gap):
+    """Mask of the cells less than `gap` (Chebyshev) from any of `cells`."""
+    m = np.zeros((H, W), dtype=bool)
+    for r, c in cells:
+        m[max(0, r - gap + 1):r + gap, max(0, c - gap + 1):c + gap] = True
+    return m
+
+
+def _placements(shape_name, forbidden):
+    """Every orientation and position of a shape that covers no forbidden cell, in a fixed order."""
+    out = []
+    for cells in ORIENTATIONS[shape_name]:
+        hh = max(r for r, _ in cells) + 1; ww = max(c for _, c in cells) + 1
+        bad = np.zeros((H - hh + 1, W - ww + 1), dtype=bool)
+        for r, c in cells:
+            bad |= forbidden[r:r + H - hh + 1, c:c + W - ww + 1]
+        out += [[(r + int(r0), c + int(c0)) for r, c in cells] for r0, c0 in zip(*np.nonzero(~bad))]
+    return out
+
+
+def generate_one_v2(rng):
+    """v2: the spawn run first (top or bottom row, random start), then every patch drawn uniformly from the positions
+    and orientations that keep MIN_SPAWN_TO_TREE from the run and MIN_PATCH_GAP from the patches placed. A char grid,
+    or None when a patch has no room left."""
+    g = np.full((H, W), " ")
+    r = int(rng.choice((0, H - 1))); c0 = int(rng.integers(0, W - N_SPAWN + 1))
+    run = [(r, c) for c in range(c0, c0 + N_SPAWN)]
+    for rc in run:
+        g[rc] = "P"
+    forbidden = _near(run, MIN_SPAWN_TO_TREE)
+    for slot, shape in enumerate(SHAPES):                  # the diamonds first, as in v1
+        options = _placements(shape, forbidden)
+        if not options:
+            return None
+        put = options[rng.integers(len(options))]
+        for rc in put:
+            g[rc] = SLOT_LETTERS[slot]
+        forbidden |= _near(put, MIN_PATCH_GAP)
+    return g
+
+
+def generate(n, seed=POOL_SEED, max_tries=2_000_000, version=VERSION):
+    one = {1: generate_one, 2: generate_one_v2}[version]
     rng = np.random.default_rng(seed); out = []; tries = fails = 0
     while len(out) < n and tries < max_tries:
         tries += 1
-        g = generate_one(rng)
+        g = one(rng)
         if g is None:
             fails += 1
             continue
         m = metrics(g)
         assert m["neighbours"] == REFERENCE["neighbours"], (m["neighbours"], REFERENCE["neighbours"])
         assert m["trees"] == N_TREES and m["spawns"] == N_SPAWN and m["patch_sizes"] == REFERENCE["patch_sizes"]
+        assert m["min_patch_separation"] >= MIN_PATCH_GAP and m["spawn_to_tree"] >= MIN_SPAWN_TO_TREE, m
         out.append(g)
     return out, {"tries": tries, "accepted": len(out), "placement_failures": fails}
 
@@ -151,6 +211,9 @@ class Orig6Pool(LayoutPool):
             g[r, c] = "P"
         return g
 
+    def save(self, path, version=VERSION):
+        np.savez_compressed(path, version=version, **self.arrays)
+
 
 def _to_pool(grids):
     cells = [[(r, c) for r in range(H) for c in range(W) if g[r, c] in SLOT_LETTERS] for g in grids]   # row-major, like find_positions
@@ -160,30 +223,32 @@ def _to_pool(grids):
                       "spawns": np.asarray(spawns, dtype=np.int16)}, (H, W))
 
 
-def default_pool(rebuild=False):
-    if rebuild or not os.path.exists(CACHE):
-        grids, stats = generate(POOL_SIZE, POOL_SEED)
+def default_pool(rebuild=False, version=VERSION):
+    path = cache_path(version)
+    if rebuild or not os.path.exists(path):
+        grids, stats = generate(POOL_SIZE, POOL_SEED, version=version)
         assert len(grids) == POOL_SIZE, stats
-        _to_pool(grids).save(CACHE)
-        print(f"[layouts_orig6] wrote {CACHE}: {stats}")
-    pool = Orig6Pool(LayoutPool.load(CACHE).arrays, (H, W))
+        _to_pool(grids).save(path, version)
+        print(f"[layouts_orig6] wrote {path}: {stats}, {stats['accepted'] / stats['tries']:.1%} of the tries kept")
+    pool = Orig6Pool(LayoutPool.load(path).arrays, (H, W))
     assert pool.arrays["apple"].shape[1:] == (N_TREES, 2) and pool.arrays["spawns"].shape[1:] == (N_SPAWN, 2)
     return pool
 
 
-def layout_split(on_train=False, frac=0.8, seed=0):
-    train, held = default_pool().split(frac, seed)
+def layout_split(on_train=False, frac=0.8, seed=0, version=VERSION):
+    train, held = default_pool(version=version).split(frac, seed)
     return train if on_train else held
 
 
-def pick_layout(seed, on_train=False):
+def pick_layout(seed, on_train=False, version=VERSION):
     """The map a meta-episode with this seed plays on: an index into the held-out (or training) split, fixed by the seed,
     so every model evaluated on a seed meets the same map."""
-    return int(np.random.default_rng(seed).integers(layout_split(on_train).size))
+    return int(np.random.default_rng(seed).integers(layout_split(on_train, version=version).size))
 
 
 if __name__ == "__main__":
-    pool = default_pool(rebuild=True)
+    ap = argparse.ArgumentParser(); ap.add_argument("--version", type=int, choices=VERSIONS, default=VERSION)
+    pool = default_pool(rebuild=True, version=ap.parse_args().version)
     ms = [metrics(pool.char_grid(i)) for i in range(pool.size)]
     print("reference (ORIG6_MAP):", REFERENCE)
     assert all(m["neighbours"] == REFERENCE["neighbours"] for m in ms), "a layout changed the regrowth neighbourhoods"
