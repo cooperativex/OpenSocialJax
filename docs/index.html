@@ -176,7 +176,7 @@ const el=(tag,cls,text)=>{const e=document.createElement(tag); if(cls) e.classNa
 const fmt=x=>Number.isInteger(x)?String(x):x.toFixed(2);
 
 function Player(root){
-  const dir=root.dataset.dir, game=root.dataset.game, unit=root.dataset.unit;
+  const V="?v=2", dir=root.dataset.dir, game=root.dataset.game, unit=root.dataset.unit;
   let idx=null, data=null, cur=-1, shown=new Set([0,1,2,3,4]), open={}, loadId=0;
   const tabs=el("div","tabs"); tabs.setAttribute("role","tablist");
   const stage=el("div","stage"), left=el("div","screen"), right=el("div");
@@ -238,8 +238,8 @@ function Player(root){
     cards.replaceChildren(el("div","hint","Loading trial "+(k+1)+" …"));
     const tr=idx.trials[k];
     note.textContent=tr.skipped?("The orchard was empty after step "+(tr.skipped[0]-1)+". Steps "+tr.skipped[0]+"–"+tr.skipped[1]+" were skipped in the run."):"";
-    video.src=dir+"/trial"+tr.trial+".mp4";
-    fetch(dir+"/trial"+tr.trial+".json").then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); }).then(d=>{
+    video.src=dir+"/trial"+tr.trial+".mp4"+V;
+    fetch(dir+"/trial"+tr.trial+".json"+V).then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); }).then(d=>{
       if(id!==loadId) return; data=d; range.max=d.steps-1; video.playbackRate=+speed.value; render(0);
     }).catch(e=>{ if(id===loadId) cards.replaceChildren(el("div","note","Could not load this trial ("+e.message+"). The page must be opened through a web server, not as a local file.")); });
   }
@@ -258,7 +258,7 @@ function Player(root){
     else if(e.key==="ArrowRight"&&e.target!==range){e.preventDefault(); bNext.onclick();}
   });
 
-  fetch(dir+"/index.json").then(r=>r.json()).then(j=>{
+  fetch(dir+"/index.json"+V,{cache:"no-cache"}).then(r=>r.json()).then(j=>{
     idx=j;
     j.trials.forEach((tr,k)=>{
       const b=el("button","tab"); b.setAttribute("role","tab"); b.append(document.createTextNode("Trial "+tr.trial), el("small",null,fmt(tr.team)+" "+unit));
