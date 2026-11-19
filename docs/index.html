@@ -178,7 +178,7 @@ const fmt=x=>Number.isInteger(x)?String(x):x.toFixed(2);
 
 function Player(root){
   const V="?v=2", dir=root.dataset.dir, game=root.dataset.game, unit=root.dataset.unit;
-  let idx=null, data=null, cur=-1, shown=new Set([0,1,2,3,4]), open={}, loadId=0;
+  let idx=null, data=null, cur=-1, shown=new Set([0]), open={}, loadId=0;
   const tabs=el("div","tabs"); tabs.setAttribute("role","tablist");
   const stage=el("div","stage"), left=el("div","screen"), right=el("div");
   const video=el("video"); video.muted=true; video.playsInline=true; video.preload="metadata";
@@ -195,7 +195,7 @@ function Player(root){
 
   LETTERS.split("").forEach((L,i)=>{
     const b=el("button","chipbtn"); const d=el("span","dot"); d.style.background=COLORS[i]; b.append(d,document.createTextNode("Agent "+L));
-    b.setAttribute("aria-pressed","true");
+    b.setAttribute("aria-pressed",shown.has(i));
     b.onclick=()=>{ if(shown.has(i)) shown.delete(i); else shown.add(i); b.setAttribute("aria-pressed",shown.has(i)); cur=-1; render(); };
     filter.append(b);
   });
