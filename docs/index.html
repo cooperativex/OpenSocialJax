@@ -69,7 +69,8 @@ video{width:100%;height:auto;display:block;border-radius:8px;background:#000;ima
 .status b{font-weight:600}
 .board{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
 .board .bh{font-size:13px;color:var(--muted);margin-bottom:4px}
-.brow2{display:grid;grid-template-columns:minmax(0,190px) 1fr 118px;gap:8px;align-items:center;font-size:13.5px;padding:2px 0}
+.bpanel+.bpanel{margin-top:10px}
+.brow2{display:grid;grid-template-columns:minmax(0,190px) 1fr 96px;gap:8px;align-items:center;font-size:13.5px;padding:2px 0}
 .brow2 .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .brow2 .tk{height:12px;background:var(--soft);border-radius:3px;overflow:hidden}
 .brow2 .fl{height:100%;border-radius:0 3px 3px 0}
@@ -167,7 +168,7 @@ footer{padding:26px 0 50px;color:var(--muted);font-size:14px;border-top:1px soli
   </div>
 
   <h3>OpenCleanup · Claude Opus 5.5</h3>
-  <div class="mid"><p>5 agents, 5 trials of 400 steps. The score of a trial is the number of apples the team ate. A yellow overlay marks the cells an agent fires at.</p></div>
+  <div class="mid"><p>5 agents, 5 trials of 400 steps. The score of a trial is the number of apples the team ate. Cleaning counts every waste cell an agent cleared to water or made one shade lighter. A yellow overlay marks the cells an agent fires at.</p></div>
   <div class="player" data-game="cleanup" data-dir="replays/cleanup" data-unit="apples"></div>
 
   <h3>OpenHarvest · Claude Opus 5.5</h3>
@@ -224,7 +225,7 @@ const el=(tag,cls,text)=>{const e=document.createElement(tag); if(cls) e.classNa
 const fmt=x=>Number.isInteger(x)?String(x):x.toFixed(2);
 
 function Player(root){
-  const V="?v=3", dir=root.dataset.dir, game=root.dataset.game, unit=root.dataset.unit;
+  const V="?v=4", dir=root.dataset.dir, game=root.dataset.game, unit=root.dataset.unit;
   let idx=null, data=null, cur=-1, shown=new Set([0]), open={}, loadId=0;
   const tabs=el("div","tabs"); tabs.setAttribute("role","tablist");
   const stage=el("div","stage"), left=el("div","screen"), right=el("div");
@@ -262,22 +263,29 @@ function Player(root){
     const add=(k,v)=>{const s=el("span"); s.append(document.createTextNode(k+" "),el("b",null,v)); status.append(s);};
     add("Trial",data.trial+" of "+idx.trials.length); add("Step",t+" of "+data.inner);
     add("Team "+unit+" so far",fmt(team)); add("Trial total",fmt(data.team));
-    board.replaceChildren(el("div","bh","Reward of each agent so far in this trial ("+unit+")"));
-    const top=Math.max(1,...data.final.map(x=>x.return));
-    row.forEach((a,i)=>{
-      const r=el("div","brow2"), nm=el("div","nm"), d=el("span","dot"); d.style.background=COLORS[i]; d.style.marginRight="6px";
-      nm.append(d,document.createTextNode(who(i))); nm.title=who(i);
-      const tk=el("div","tk"), fl=el("div","fl"); fl.style.width=Math.min(100,100*a.s[0]/top)+"%"; fl.style.background=COLORS[i]; tk.append(fl);
-      const vl=el("div","vl"); vl.append(document.createTextNode(fmt(a.s[0])+" "), el("small",null,game==="cleanup"?"· "+a.s[1]+" cleared":"· "+a.s[1]+" apples"));
-      r.append(nm,tk,vl); board.append(r);
-    });
+    board.replaceChildren();
+    const panel=(title,k,top,extra)=>{
+      const b=el("div","bpanel"); b.append(el("div","bh",title));
+      row.forEach((a,i)=>{
+        const r=el("div","brow2"), nm=el("div","nm"), d=el("span","dot"); d.style.background=COLORS[i]; d.style.marginRight="6px";
+        nm.append(d,document.createTextNode(who(i))); nm.title=who(i);
+        const tk=el("div","tk"), fl=el("div","fl"); fl.style.width=Math.min(100,100*a.s[k]/Math.max(1,top))+"%"; fl.style.background=COLORS[i]; tk.append(fl);
+        const vl=el("div","vl"); vl.append(document.createTextNode(fmt(a.s[k]))); if(extra) vl.append(el("small",null," "+extra(a)));
+        r.append(nm,tk,vl); b.append(r);
+      });
+      board.append(b);
+    };
+    if(game==="cleanup"){
+      panel("Apples eaten so far in this trial",0,Math.max(...data.final.map(x=>x.return)));
+      panel("Waste cells cleaned so far in this trial (cleared to water or made one shade lighter)",1,Math.max(...data.cleaned));
+    } else panel("Points earned so far in this trial",0,Math.max(...data.final.map(x=>x.return)),a=>"· "+a.s[1]+" apples");
     cards.replaceChildren();
     row.forEach((a,i)=>{
       if(!shown.has(i)) return;
       const c=el("div","card"+(a.frozen?" frozen":"")); c.style.borderLeftColor=COLORS[i];
       const top=el("div","top"); top.append(el("span","name",who(i)), el("span","badge",a.act));
       if(a.mode) top.append(el("span","badge","mode: "+a.mode));
-      top.append(el("span","score",game==="cleanup"?(fmt(a.s[0])+" apples · "+a.s[1]+" cleared"):(fmt(a.s[0])+" points · "+a.s[1]+" apples")));
+      top.append(el("span","score",game==="cleanup"?(fmt(a.s[0])+" apples · "+a.s[1]+" cleaned"):(fmt(a.s[0])+" points · "+a.s[1]+" apples")));
       c.append(top, el("div","why",a.why));
       const kv=(k,v)=>{ if(!v) return; const d=el("div","kv"); d.append(el("b",null,k+": "),document.createTextNode(v)); c.append(d); };
       kv("Goal",a.goal); kv("Result",a.out); kv("Note written",a.note);
