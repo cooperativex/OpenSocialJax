@@ -5,7 +5,7 @@
     <img src="https://img.shields.io/badge/arXiv-2610.13710-b31b1b.svg" alt="arXiv"></a>
   
   <a href="https://cooperativex.github.io/OpenSocialJax/">
-    <img src="https://img.shields.io/badge/project-page-2ea44f.svg" alt="Project page"></a>
+    <img src="https://img.shields.io/badge/project-page-8250df.svg" alt="Project page"></a>
   
   <a href="https://github.com/cooperativex/OpenSocialJax/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="Apache 2.0 License"></a>
