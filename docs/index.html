@@ -160,7 +160,7 @@ footer{padding:26px 0 50px;color:var(--muted);font-size:14px;border-top:1px soli
 
   <div class="mid">
     <h3>OpenHarvest</h3>
-    <p>OpenHarvest is Commons Harvest with ripeness. An apple is unripe, then ripe, then over-ripe, and then it rots. For every colour, two things are hidden: how many points an apple pays at each stage (1, 0.5 and 0.25 in some order), and how fast its cell regrows after being harvested at each stage (×2, ×1 and ×0.5 in some order). This gives 60,466,176 rule sets. A cell regrows only while apples still hang near it, so restraint keeps a common pool alive that any single agent can deplete. An agent can also zap another one, which sends it back to the spawn row and disables it for 12 steps.</p>
+    <p>OpenHarvest is Commons Harvest with ripeness. An apple is unripe, then ripe, then over-ripe, and then it rots. For every colour, two things are hidden: the payoff of an apple at each stage (1, 0.5 and 0.25 in some order), and how fast its cell regrows after being harvested at each stage (×2, ×1 and ×0.5 in some order). This gives 60,466,176 rule sets. A cell regrows only while apples still hang near it, so restraint keeps a common pool alive that any single agent can deplete. An agent can also zap another one, which sends it back to the spawn row and disables it for 12 steps.</p>
   </div>
   <figure>
     <img src="figures/open_harvest_overview.png" alt="OpenHarvest: environment components, sampling a latent configuration, instantiating and interacting" loading="lazy">
@@ -179,8 +179,8 @@ footer{padding:26px 0 50px;color:var(--muted);font-size:14px;border-top:1px soli
   <div class="player" data-game="cleanup" data-dir="replays/cleanup" data-unit="apples"></div>
 
   <h3>OpenHarvest · Claude Opus 5.5</h3>
-  <div class="mid"><p>5 agents, 5 trials of up to 300 steps. The score of a trial is the team's points. A trial's replay ends when the last apple is gone, because nothing can regrow after that and the remaining steps were skipped in the run. A yellow overlay marks the cells an agent zaps.</p></div>
-  <div class="player" data-game="harvest" data-dir="replays/harvest" data-unit="points"></div>
+  <div class="mid"><p>5 agents, 5 trials of up to 300 steps. The score of a trial is the team's payoff. A trial's replay ends when the last apple is gone, because nothing can regrow after that and the remaining steps were skipped in the run. A yellow overlay marks the cells an agent zaps.</p></div>
+  <div class="player" data-game="harvest" data-dir="replays/harvest" data-unit="payoff"></div>
 </section>
 
 <section id="arena">
@@ -204,8 +204,8 @@ footer{padding:26px 0 50px;color:var(--muted);font-size:14px;border-top:1px soli
   <div class="player" data-game="cleanup" data-dir="replays/arena_cleanup" data-unit="apples"></div>
 
   <h3>OpenHarvest · mixed arena</h3>
-  <div class="mid"><p>Below the video, the board shows every agent's points, apples and zaps so far in the trial. A zap sends the agent it hits back to the spawn row and disables it for 12 steps.</p></div>
-  <div class="player" data-game="harvest" data-dir="replays/arena_harvest" data-unit="points"></div>
+  <div class="mid"><p>Below the video, the board shows every agent's payoff, apples and zaps so far in the trial. A zap sends the agent it hits back to the spawn row and disables it for 12 steps.</p></div>
+  <div class="player" data-game="harvest" data-dir="replays/arena_harvest" data-unit="payoff"></div>
 </section>
 
 <section>
@@ -301,7 +301,7 @@ function Player(root){
     } else {
       const tP=Math.max(1,...data.final.map(x=>x.return)), tE=Math.max(1,...data.final.map(x=>x.apples)), tZ=Math.max(1,...data.zaps);
       const b=el("div","bpanel"), hd=el("div","brow3 c3 bh");
-      hd.append(el("div",null,"So far in this trial"),el("div",null,"Points"),el("div",null,"Apples eaten"),el("div",null,"Zaps fired")); b.append(hd);
+      hd.append(el("div",null,"So far in this trial"),el("div",null,"Payoff"),el("div",null,"Apples eaten"),el("div",null,"Zaps fired")); b.append(hd);
       const cell=(v,top,i)=>{ const c=el("div","duo"), tk=el("div","tk"), fl=el("div","fl"); fl.style.width=Math.min(100,100*v/top)+"%"; fl.style.background=COLORS[i]; tk.append(fl);
         c.append(tk,el("div","vl",fmt(v))); return c; };
       row.forEach((a,i)=>{
@@ -317,7 +317,7 @@ function Player(root){
       const c=el("div","card"+(a.frozen?" frozen":"")); c.style.borderLeftColor=COLORS[i];
       const top=el("div","top"); top.append(el("span","name",who(i)), el("span","badge",a.act));
       if(a.mode) top.append(el("span","badge","mode: "+a.mode));
-      top.append(el("span","score",game==="cleanup"?(fmt(a.s[0])+" apples · "+a.s[1]+" cleaned"):(fmt(a.s[0])+" points · "+a.s[1]+" apples")));
+      top.append(el("span","score",game==="cleanup"?(fmt(a.s[0])+" apples · "+a.s[1]+" cleaned"):("payoff "+fmt(a.s[0])+" · "+a.s[1]+" apples")));
       c.append(top, el("div","why",a.why));
       const kv=(k,v)=>{ if(!v) return; const d=el("div","kv"); d.append(el("b",null,k+": "),document.createTextNode(v)); c.append(d); };
       kv("Goal",a.goal); kv("Result",a.out); kv("Note written",a.note);
@@ -362,7 +362,7 @@ function Player(root){
     idx=j; if(j.seats&&j.seats.indexOf("claude-opus-5.5")>=0) shown=new Set([j.seats.indexOf("claude-opus-5.5")]);
     buildFilter();
     j.trials.forEach((tr,k)=>{
-      const b=el("button","tab"); b.setAttribute("role","tab"); b.append(document.createTextNode("Trial "+tr.trial), el("small",null,fmt(tr.team)+" "+unit));
+      const b=el("button","tab"); b.setAttribute("role","tab"); b.append(document.createTextNode("Trial "+tr.trial), el("small",null,unit==="payoff"?"payoff "+fmt(tr.team):fmt(tr.team)+" "+unit));
       b.onclick=()=>load(k); tabs.append(b);
     });
     load(0);
