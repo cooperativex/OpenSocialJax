@@ -4,9 +4,6 @@
   <a href="https://arxiv.org/abs/2610.13710">
     <img src="https://img.shields.io/badge/arXiv-2610.13710-b31b1b.svg" alt="arXiv"></a>
   
-  <a href="https://cooperativex.github.io/OpenSocialJax/">
-    <img src="https://img.shields.io/badge/project%20page-replays-1f5fa8.svg" alt="Project page"></a>
-  
   <a href="https://github.com/cooperativex/OpenSocialJax/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="Apache 2.0 License"></a>
   
@@ -15,9 +12,6 @@
 </p>
 
 *Two sequential social dilemmas with hidden rules to discover, in JAX, and a harness for LLM agents to play them.*
-
-**[Project page](https://cooperativex.github.io/OpenSocialJax/)** — the abstract, the environments, and step-by-step replays of
-LLM agents with what each agent wrote at every step.
 
 OpenSocialJax extends [SocialJax](https://github.com/cooperativex/SocialJax) (ICLR 2026) with two environments in which the
 agents must work out how the world works while the social dilemma is in force, and with everything needed to run
