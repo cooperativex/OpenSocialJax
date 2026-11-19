@@ -275,7 +275,9 @@ function Player(root){
       });
       board.append(b);
     };
-    if(game==="cleanup"){
+    board.style.display=idx.seats?"":"none";
+    if(!idx.seats){}
+    else if(game==="cleanup"){
       panel("Apples eaten so far in this trial",0,Math.max(...data.final.map(x=>x.return)));
       panel("Waste cells cleaned so far in this trial (cleared to water or made one shade lighter)",1,Math.max(...data.cleaned));
     } else panel("Points earned so far in this trial",0,Math.max(...data.final.map(x=>x.return)),a=>"· "+a.s[1]+" apples");
