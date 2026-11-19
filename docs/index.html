@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenSocialJax</title>
+<meta name="description" content="OpenSocialJax: evaluating social adaptation in sequential social dilemmas with open-ended environmental dynamics.">
+<style>
+:root{
+  --bg:#fbfaf7; --panel:#ffffff; --ink:#1d2126; --muted:#5d6670; --line:#e2dfd7; --accent:#1f5fa8; --accent-ink:#ffffff;
+  --soft:#f1efe9; --code:#f4f2ec; --warn:#8a5a00;
+  --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#14171a; --panel:#1c2024; --ink:#e8e6e1; --muted:#9aa3ad; --line:#30363d; --accent:#7db4f0; --accent-ink:#0f1215;
+         --soft:#22272c; --code:#1f2428; --warn:#e0b050; }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;font-size:16px}
+a{color:var(--accent)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+.narrow{max-width:820px;margin:0 auto}
+header.hero{padding:56px 0 28px;text-align:center}
+header.hero h1{font-family:var(--serif);font-weight:600;font-size:clamp(28px,4.4vw,44px);line-height:1.18;margin:0 0 6px;text-wrap:balance}
+header.hero h1 span{display:block;font-size:.56em;font-weight:400;color:var(--muted);margin-top:10px}
+.authors{font-size:18px;margin:22px 0 4px}
+.authors span{white-space:nowrap;margin:0 9px}
+.btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:22px}
+.btn{display:inline-block;padding:9px 20px;border-radius:999px;background:var(--ink);color:var(--bg);text-decoration:none;font-weight:600;font-size:15px}
+.btn.alt{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn:hover{opacity:.85}
+section{padding:34px 0;border-top:1px solid var(--line)}
+h2{font-family:var(--serif);font-weight:600;font-size:28px;margin:0 0 14px}
+h3{font-size:19px;margin:26px 0 8px}
+p{margin:0 0 14px}
+.abstract{font-size:17px;text-align:justify;hyphens:auto}
+figure{margin:18px 0}
+figure img{width:100%;height:auto;border-radius:8px;border:1px solid var(--line);background:#fff;display:block}
+figcaption{font-size:14px;color:var(--muted);margin-top:8px}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:16px 0}
+.fact{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px}
+.fact b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.fact span{font-size:13px;color:var(--muted)}
+
+/* replay player */
+.player{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:14px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.tab{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;padding:6px 12px;font:inherit;font-size:14px;cursor:pointer;text-align:left;line-height:1.25}
+.tab small{display:block;color:var(--muted);font-size:12px}
+.tab[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.tab[aria-selected="true"] small{color:var(--accent-ink);opacity:.85}
+.stage{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:900px){.stage{grid-template-columns:1fr}}
+.screen{position:sticky;top:10px}
+@media (max-width:900px){.screen{position:static}}
+video{width:100%;height:auto;display:block;border-radius:8px;background:#000;image-rendering:pixelated}
+.controls{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+.controls button,.controls select{border:1px solid var(--line);background:var(--soft);color:var(--ink);border-radius:6px;padding:5px 10px;font:inherit;font-size:14px;cursor:pointer}
+.controls input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}
+.status{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;margin-top:8px;font-variant-numeric:tabular-nums}
+.status b{font-weight:600}
+.hint{font-size:13px;color:var(--muted);margin-top:6px}
+.note{font-size:13px;color:var(--warn);margin-top:6px}
+.filter{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+.chipbtn{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:3px 11px;font:inherit;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.chipbtn[aria-pressed="true"]{background:var(--soft);border-color:var(--ink)}
+.dot{width:11px;height:11px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.45)}
+.cards{display:flex;flex-direction:column;gap:8px;max-height:760px;overflow:auto;padding-right:2px}
+.card{border:1px solid var(--line);border-left-width:5px;border-radius:8px;padding:9px 12px;background:var(--bg)}
+.card.frozen{opacity:.55}
+.card .top{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-size:14px}
+.card .name{font-weight:700}
+.badge{font-family:var(--mono);font-size:12.5px;background:var(--soft);border-radius:5px;padding:1px 7px}
+.card .score{margin-left:auto;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.card .why{margin:6px 0 4px;font-size:14.5px;line-height:1.5}
+.card .kv{font-size:13px;color:var(--muted);margin:2px 0}
+.card .kv b{color:var(--ink);font-weight:600}
+.card details{margin-top:5px;font-size:13px}
+.card summary{cursor:pointer;color:var(--accent)}
+.card pre{white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12px;background:var(--code);border-radius:6px;padding:8px 10px;margin:6px 0 0;max-height:280px;overflow:auto}
+pre.bib{font-family:var(--mono);font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:8px;padding:14px;overflow:auto}
+footer{padding:26px 0 50px;color:var(--muted);font-size:14px;border-top:1px solid var(--line);text-align:center}
+</style>
+</head>
+<body>
+
+<header class="hero wrap">
+  <h1>OpenSocialJax
+    <span>Evaluating Social Adaptation in Sequential Social Dilemmas with Open-Ended Environmental Dynamics</span></h1>
+  <div class="authors"><span>Zihao Guo</span><span>Meng Fang</span><span>Joel Z. Leibo</span><span>Yali Du</span></div>
+  <div class="btns">
+    <a class="btn" href="https://arxiv.org/abs/2610.13710">Paper (arXiv)</a>
+    <a class="btn" href="https://github.com/cooperativex/OpenSocialJax">Code</a>
+    <a class="btn alt" href="#replays">Replays</a>
+  </div>
+</header>
+
+<main class="wrap">
+
+<section>
+  <div class="narrow">
+    <h2>Abstract</h2>
+    <p class="abstract">Sequential social dilemma benchmarks capture diverse social interactions, but rarely test whether agents can infer hidden environmental rules through repeated interaction while adapting to other agents. We introduce <b>OpenSocialJax</b>, which extends Clean Up and Commons Harvest across an open-ended distribution of latent environment configurations, systematically varying spatial layouts and hidden rules governing tool crafting, payoffs, and resource dynamics. Each episode samples one configuration from tens of millions of possibilities and holds it fixed across five trials. We evaluate eight large language models, including three closed source models and five open source models. Our evaluation tests whether models can discover hidden rules and adapt to other agents in homogeneous and mixed teams. We find that rule discovery often improves performance but does not reliably sustain cooperation, as the cleaning burden becomes concentrated among fewer agents in OpenCleanup and every team eventually exhausts the shared resource in OpenHarvest. In our mixed arena, one cooperative agent was able to sustain the public good in OpenCleanup at a cost to its own return, but could not prevent resource depletion in OpenHarvest. Together, these results highlight the difficulty of adapting jointly to unfamiliar environmental dynamics and the changing behavior of other agents.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Environments</h2>
+  <div class="narrow">
+    <p>OpenSocialJax has two environments, both written in JAX. Each one takes a classic sequential social dilemma and adds a latent configuration: a map and a set of hidden rules, sampled once per meta-episode from held-out splits. A meta-episode is five trials on the same configuration. The world is laid out again at the start of every trial, and the agents keep what they learned. Rewards are individual.</p>
+  </div>
+  <figure>
+    <img src="figures/env_mosaic.png" alt="OpenCleanup (top) and OpenHarvest (bottom) on different held-out maps, five agents each" loading="lazy">
+    <figcaption>OpenCleanup (top) and OpenHarvest (bottom) on different held-out maps, five agents each.</figcaption>
+  </figure>
+
+  <div class="narrow">
+    <h3>OpenCleanup</h3>
+    <p>OpenCleanup is Clean Up with a crafting rule. The river carries waste of one hue in three shades, and cleaning it takes a chain of three working tools: one turns dark waste into mid, one turns mid into light, and one turns light into clean water. A working tool is an ordered pair of pick-ups from four base-tool stations. Which of the 16 ordered pairs makes which tool is hidden, and is one of 57,657,600 rule sets. Apples grow only while the river is clean enough, so cleaning is a public good that some agents must provide, while every apple pays only the agent that eats it.</p>
+  </div>
+  <figure>
+    <img src="figures/open_cleanup_overview.png" alt="OpenCleanup: environment components, sampling a latent configuration, instantiating and interacting" loading="lazy">
+    <figcaption>OpenCleanup: the components, how a latent configuration is sampled, and one example configuration.</figcaption>
+  </figure>
+
+  <div class="narrow">
+    <h3>OpenHarvest</h3>
+    <p>OpenHarvest is Commons Harvest with ripeness. An apple is unripe, then ripe, then over-ripe, and then it rots. For every colour, two things are hidden: how many points an apple pays at each stage (1, 0.5 and 0.25 in some order), and how fast its cell regrows after being harvested at each stage (×2, ×1 and ×0.5 in some order). This gives 60,466,176 rule sets. A cell regrows only while apples still hang near it, so restraint keeps a common pool alive that any single agent can deplete. An agent can also zap another one, which sends it back to the spawn row and disables it for 12 steps.</p>
+  </div>
+  <figure>
+    <img src="figures/open_harvest_overview.png" alt="OpenHarvest: environment components, sampling a latent configuration, instantiating and interacting" loading="lazy">
+    <figcaption>OpenHarvest: the components, how a latent configuration is sampled, and one example configuration.</figcaption>
+  </figure>
+</section>
+
+<section id="replays">
+  <h2>Replays</h2>
+  <div class="narrow">
+    <p>The two replays below are full meta-episodes from the paper's homogeneous setting: five copies of Claude Opus 5.5 play five trials on one hidden configuration. For each environment we show the seed whose total score is closest to the model's three-seed average. The video shows one frame per step, drawn as the world was when the agents decided. The panel next to it shows what every agent wrote at that step: its action, its reasoning, its goal, the notes it keeps, and the facts the harness has recorded for it.</p>
+  </div>
+
+  <h3>OpenCleanup · Claude Opus 5.5 · seed 908</h3>
+  <div class="narrow"><p>5 agents, 5 trials of 400 steps. The score of a trial is the number of apples the team ate. A yellow overlay marks the cells an agent fires at.</p></div>
+  <div class="player" data-game="cleanup" data-dir="replays/cleanup" data-unit="apples"></div>
+
+  <h3>OpenHarvest · Claude Opus 5.5 · seed 906</h3>
+  <div class="narrow"><p>5 agents, 5 trials of up to 300 steps. The score of a trial is the team's points. A trial's replay ends when the last apple is gone, because nothing can regrow after that and the remaining steps were skipped in the run. A yellow overlay marks the cells an agent zaps.</p></div>
+  <div class="player" data-game="harvest" data-dir="replays/harvest" data-unit="points"></div>
+</section>
+
+<section>
+  <div class="narrow">
+    <h2>BibTeX</h2>
+<pre class="bib">@article{guo2026opensocialjax,
+  title   = {OpenSocialJax: Evaluating Social Adaptation in Sequential Social Dilemmas
+             with Open-Ended Environmental Dynamics},
+  author  = {Guo, Zihao and Fang, Meng and Leibo, Joel Z. and Du, Yali},
+  journal = {arXiv preprint arXiv:2610.13710},
+  year    = {2026}
+}</pre>
+  </div>
+</section>
+
+</main>
+
+<footer class="wrap">OpenSocialJax · code under the Apache 2.0 license · <a href="https://github.com/cooperativex/OpenSocialJax">github.com/cooperativex/OpenSocialJax</a></footer>
+
+<script>
+(function(){
+"use strict";
+const COLORS=["#e6194b","#f58230","#ffe119","#f032e6","#46f0f0"], LETTERS="ABCDE";
+const el=(tag,cls,text)=>{const e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e;};
+const fmt=x=>Number.isInteger(x)?String(x):x.toFixed(2);
+
+function Player(root){
+  const dir=root.dataset.dir, game=root.dataset.game, unit=root.dataset.unit;
+  let idx=null, data=null, cur=-1, shown=new Set([0,1,2,3,4]), open={}, loadId=0;
+  const tabs=el("div","tabs"); tabs.setAttribute("role","tablist");
+  const stage=el("div","stage"), left=el("div","screen"), right=el("div");
+  const video=el("video"); video.muted=true; video.playsInline=true; video.preload="metadata";
+  const controls=el("div","controls");
+  const bPlay=el("button",null,"Play"), bPrev=el("button",null,"◀ step"), bNext=el("button",null,"step ▶");
+  const range=el("input"); range.type="range"; range.min=0; range.value=0; range.setAttribute("aria-label","step");
+  const speed=el("select"); [["0.5","0.5×"],["1","1×"],["2","2×"],["4","4×"]].forEach(([v,t])=>{const o=el("option",null,t); o.value=v; if(v==="1") o.selected=true; speed.append(o);});
+  speed.setAttribute("aria-label","playback speed");
+  controls.append(bPlay,bPrev,bNext,range,speed);
+  const status=el("div","status"), note=el("div","note"), hint=el("div","hint","Keyboard, when the player has focus: space plays or pauses, ← and → step.");
+  left.append(video,controls,status,note,hint);
+  const filter=el("div","filter"), cards=el("div","cards");
+  right.append(filter,cards); stage.append(left,right); root.append(tabs,stage); root.tabIndex=0;
+
+  LETTERS.split("").forEach((L,i)=>{
+    const b=el("button","chipbtn"); const d=el("span","dot"); d.style.background=COLORS[i]; b.append(d,document.createTextNode("Agent "+L));
+    b.setAttribute("aria-pressed","true");
+    b.onclick=()=>{ if(shown.has(i)) shown.delete(i); else shown.add(i); b.setAttribute("aria-pressed",shown.has(i)); cur=-1; render(); };
+    filter.append(b);
+  });
+
+  const stepNow=()=>data?Math.max(0,Math.min(data.steps-1,Math.floor(video.currentTime*data.fps+1e-3))):0;
+  const seek=t=>{ if(!data) return; t=Math.max(0,Math.min(data.steps-1,t)); video.currentTime=(t+0.5)/data.fps; render(t); };
+
+  function render(force){
+    if(!data) return;
+    const t=force!=null?force:stepNow();
+    if(t===cur) return; cur=t;
+    range.value=t;
+    const row=data.frames[t]; let team=0; row.forEach(a=>team+=a.s[0]);
+    status.replaceChildren();
+    const add=(k,v)=>{const s=el("span"); s.append(document.createTextNode(k+" "),el("b",null,v)); status.append(s);};
+    add("Trial",data.trial+" of "+idx.trials.length); add("Step",t+" of "+data.inner);
+    add("Team "+unit+" so far",fmt(team)); add("Trial total",fmt(data.team));
+    cards.replaceChildren();
+    row.forEach((a,i)=>{
+      if(!shown.has(i)) return;
+      const c=el("div","card"+(a.frozen?" frozen":"")); c.style.borderLeftColor=COLORS[i];
+      const top=el("div","top"); top.append(el("span","name","Agent "+LETTERS[i]), el("span","badge",a.act));
+      if(a.mode) top.append(el("span","badge","mode: "+a.mode));
+      top.append(el("span","score",game==="cleanup"?(fmt(a.s[0])+" apples · "+a.s[1]+" cleared"):(fmt(a.s[0])+" points · "+a.s[1]+" apples")));
+      c.append(top, el("div","why",a.why));
+      const kv=(k,v)=>{ if(!v) return; const d=el("div","kv"); d.append(el("b",null,k+": "),document.createTextNode(v)); c.append(d); };
+      kv("Goal",a.goal); kv("Result",a.out); kv("Note written",a.note);
+      const det=(key,label,text)=>{
+        const d=el("details"); d.open=!!open[key+i]; d.append(el("summary",null,label), el("pre",null,text||"(empty)"));
+        d.ontoggle=()=>{open[key+i]=d.open;}; c.append(d);
+      };
+      det("n","Notes the agent holds at this step",data.notes[i][a.n]);
+      det("r","Facts the harness has recorded for it",data.rules[i][a.r]);
+      cards.append(c);
+    });
+  }
+
+  function load(k){
+    const id=++loadId; data=null; cur=-1; video.pause(); bPlay.textContent="Play";
+    [...tabs.children].forEach((b,j)=>b.setAttribute("aria-selected",j===k));
+    cards.replaceChildren(el("div","hint","Loading trial "+(k+1)+" …"));
+    const tr=idx.trials[k];
+    note.textContent=tr.skipped?("The orchard was empty after step "+(tr.skipped[0]-1)+". Steps "+tr.skipped[0]+"–"+tr.skipped[1]+" were skipped in the run."):"";
+    video.src=dir+"/trial"+tr.trial+".mp4";
+    fetch(dir+"/trial"+tr.trial+".json").then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); }).then(d=>{
+      if(id!==loadId) return; data=d; range.max=d.steps-1; video.playbackRate=+speed.value; render(0);
+    }).catch(e=>{ if(id===loadId) cards.replaceChildren(el("div","note","Could not load this trial ("+e.message+"). The page must be opened through a web server, not as a local file.")); });
+  }
+
+  bPlay.onclick=()=>{ if(video.paused){ if(video.ended) video.currentTime=0; video.play(); } else video.pause(); };
+  video.onplay=()=>{bPlay.textContent="Pause"; tick();}; video.onpause=()=>{bPlay.textContent="Play"; render();};
+  video.onseeked=()=>render(); video.ontimeupdate=()=>render();
+  function tick(){ render(); if(!video.paused&&!video.ended) requestAnimationFrame(tick); }
+  bPrev.onclick=()=>{video.pause(); seek(stepNow()-1);}; bNext.onclick=()=>{video.pause(); seek(stepNow()+1);};
+  range.oninput=()=>{video.pause(); seek(+range.value);};
+  speed.onchange=()=>{video.playbackRate=+speed.value;};
+  root.addEventListener("keydown",e=>{
+    if(["INPUT","SELECT","BUTTON","SUMMARY"].includes(e.target.tagName)&&e.key===" ") return;
+    if(e.key===" "){e.preventDefault(); bPlay.onclick();}
+    else if(e.key==="ArrowLeft"&&e.target!==range){e.preventDefault(); bPrev.onclick();}
+    else if(e.key==="ArrowRight"&&e.target!==range){e.preventDefault(); bNext.onclick();}
+  });
+
+  fetch(dir+"/index.json").then(r=>r.json()).then(j=>{
+    idx=j;
+    j.trials.forEach((tr,k)=>{
+      const b=el("button","tab"); b.setAttribute("role","tab"); b.append(document.createTextNode("Trial "+tr.trial), el("small",null,fmt(tr.team)+" "+unit));
+      b.onclick=()=>load(k); tabs.append(b);
+    });
+    load(0);
+  }).catch(()=>{ cards.replaceChildren(el("div","note","Could not load the replay data. The page must be opened through a web server, not as a local file.")); });
+}
+document.querySelectorAll(".player").forEach(Player);
+})();
+</script>
+</body>
+</html>
