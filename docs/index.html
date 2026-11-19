@@ -70,6 +70,12 @@ video{width:100%;height:auto;display:block;border-radius:8px;background:#000;ima
 .board{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
 .board .bh{font-size:13px;color:var(--muted);margin-bottom:4px}
 .bpanel+.bpanel{margin-top:10px}
+.brow3{display:grid;grid-template-columns:minmax(0,1.25fr) 1fr 1fr;gap:14px;align-items:center;font-size:13.5px;padding:2px 0}
+.brow3 .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brow3 .duo{display:grid;grid-template-columns:1fr 34px;gap:6px;align-items:center}
+.brow3 .tk{height:12px;background:var(--soft);border-radius:3px;overflow:hidden}
+.brow3 .fl{height:100%;border-radius:0 3px 3px 0}
+.brow3 .vl{text-align:right;font-variant-numeric:tabular-nums}
 .brow2{display:grid;grid-template-columns:minmax(0,190px) 1fr 96px;gap:8px;align-items:center;font-size:13.5px;padding:2px 0}
 .brow2 .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .brow2 .tk{height:12px;background:var(--soft);border-radius:3px;overflow:hidden}
@@ -278,8 +284,17 @@ function Player(root){
     board.style.display=idx.seats?"":"none";
     if(!idx.seats){}
     else if(game==="cleanup"){
-      panel("Apples eaten so far in this trial",0,Math.max(...data.final.map(x=>x.return)));
-      panel("Waste cells cleaned so far in this trial (cleared to water or made one shade lighter)",1,Math.max(...data.cleaned));
+      const tA=Math.max(1,...data.final.map(x=>x.return)), tC=Math.max(1,...data.cleaned);
+      const b=el("div","bpanel"), hd=el("div","brow3 bh");
+      hd.append(el("div",null,"So far in this trial"),el("div",null,"Apples eaten"),el("div",null,"Waste cells cleaned")); b.append(hd);
+      const cell=(v,top,i)=>{ const c=el("div","duo"), tk=el("div","tk"), fl=el("div","fl"); fl.style.width=Math.min(100,100*v/top)+"%"; fl.style.background=COLORS[i]; tk.append(fl);
+        c.append(tk,el("div","vl",fmt(v))); return c; };
+      row.forEach((a,i)=>{
+        const r=el("div","brow3"), nm=el("div","nm"), d=el("span","dot"); d.style.background=COLORS[i]; d.style.marginRight="6px";
+        nm.append(d,document.createTextNode(who(i))); nm.title=who(i);
+        r.append(nm,cell(a.s[0],tA,i),cell(a.s[1],tC,i)); b.append(r);
+      });
+      board.append(b);
     } else panel("Points earned so far in this trial",0,Math.max(...data.final.map(x=>x.return)),a=>"· "+a.s[1]+" apples");
     cards.replaceChildren();
     row.forEach((a,i)=>{
