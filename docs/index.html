@@ -26,17 +26,15 @@ a{color:#1c4fa3}
 .narrow{max-width:760px;margin:0 auto}
 .mid{max-width:none;margin:0}
 
-/* the one game element: the stone wall of the maps, as a band at the top and the bottom */
+/* the one game element: the sand of the maps, as a band at the top and the bottom, with the faint tile grid */
 header.hero,footer{
-  background-color:var(--wall);
-  background-image:linear-gradient(var(--wall-hi),var(--wall-hi)),linear-gradient(var(--wall-hi),var(--wall-hi)),linear-gradient(var(--wall-lo),var(--wall-lo));
-  background-size:32px 3px,3px 32px,32px 3px; background-position:0 0,0 0,0 29px; background-repeat:repeat}
+  background-color:var(--sand);
+  background-image:linear-gradient(rgba(255,255,255,.22) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.22) 1px,transparent 1px);
+  background-size:32px 32px}
 header.hero{padding:40px 20px 44px;text-align:center}
 .plaque{max-width:940px;margin:0 auto;background:var(--paper);border-radius:6px;padding:32px 28px 28px}
 header.hero h1{font-family:var(--px);font-weight:700;font-size:clamp(34px,5.6vw,58px);line-height:1.05;margin:0}
 header.hero h1 span{display:block;font-family:var(--sans);font-size:clamp(16px,2vw,20px);font-weight:500;color:var(--muted);margin-top:12px;line-height:1.35;text-wrap:balance}
-.sprites{display:flex;justify-content:center;gap:8px;margin:0 0 16px}
-.sprites i{width:14px;height:14px;border:2px solid var(--ink);display:block}
 .authors{font-size:18px;margin:20px 0 4px}
 .authors span{white-space:nowrap;margin:0 9px}
 .authors sup,.affil sup{font-size:.68em;margin-left:1px}
@@ -114,15 +112,14 @@ video{width:100%;height:auto;display:block;border-radius:6px;background:#000;ima
 .paperfig .legendimg{margin-top:8px}
 .figcap{font-size:14px;color:var(--muted);margin:0 0 18px}
 pre.bib{font-family:var(--mono);font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:14px;overflow:auto}
-footer{padding:24px 20px 28px;color:#f0ede2;font-size:14px;text-align:center}
-footer a{color:#fff}
+footer{padding:24px 20px 28px;color:var(--muted);font-size:14px;text-align:center}
+footer a{color:#1c4fa3}
 </style>
 </head>
 <body>
 
 <header class="hero">
 <div class="plaque">
-<div class="sprites" aria-hidden="true"><i style="background:#e6194b"></i><i style="background:#f58230"></i><i style="background:#ffe119"></i><i style="background:#f032e6"></i><i style="background:#46f0f0"></i></div>
   <h1>OpenSocialJax
     <span>Evaluating Social Adaptation in Sequential Social Dilemmas with Open-Ended Environmental Dynamics</span></h1>
   <div class="authors"><span>Zihao Guo<sup>1</sup></span><span>Meng Fang<sup>2</sup></span><span>Joel Z. Leibo<sup>4</sup></span><span>Yali Du<sup>1,3</sup></span></div>
