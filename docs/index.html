@@ -109,8 +109,8 @@ footer{padding:26px 0 50px;color:var(--muted);font-size:14px;border-top:1px soli
   <div class="btns">
     <a class="btn" href="https://arxiv.org/abs/2610.13710">Paper (arXiv)</a>
     <a class="btn" href="https://github.com/cooperativex/OpenSocialJax">Code</a>
-    <a class="btn alt" href="#arena">Mixed arena</a>
     <a class="btn alt" href="#replays">Replays</a>
+    <a class="btn alt" href="#arena">Mixed arena</a>
   </div>
 </header>
 
@@ -152,6 +152,21 @@ footer{padding:26px 0 50px;color:var(--muted);font-size:14px;border-top:1px soli
   </figure>
 </section>
 
+<section id="replays">
+  <h2>Replays</h2>
+  <div class="mid">
+    <p>The two replays below are full meta-episodes from the paper's homogeneous setting: five copies of Claude Opus 5.5 play five trials on one hidden configuration. The video shows one frame per step, drawn as the world was when the agents decided. The panel next to it shows what every agent wrote at that step: its action, its reasoning, its goal, the notes it keeps, and the facts the harness has recorded for it.</p>
+  </div>
+
+  <h3>OpenCleanup · Claude Opus 5.5</h3>
+  <div class="mid"><p>5 agents, 5 trials of 400 steps. The score of a trial is the number of apples the team ate. A yellow overlay marks the cells an agent fires at.</p></div>
+  <div class="player" data-game="cleanup" data-dir="replays/cleanup" data-unit="apples"></div>
+
+  <h3>OpenHarvest · Claude Opus 5.5</h3>
+  <div class="mid"><p>5 agents, 5 trials of up to 300 steps. The score of a trial is the team's points. A trial's replay ends when the last apple is gone, because nothing can regrow after that and the remaining steps were skipped in the run. A yellow overlay marks the cells an agent zaps.</p></div>
+  <div class="player" data-game="harvest" data-dir="replays/harvest" data-unit="points"></div>
+</section>
+
 <section id="arena">
   <h2>Mixed arena</h2>
   <div class="mid">
@@ -173,21 +188,6 @@ footer{padding:26px 0 50px;color:var(--muted);font-size:14px;border-top:1px soli
 
   <h3>OpenHarvest · mixed arena</h3>
   <div class="player" data-game="harvest" data-dir="replays/arena_harvest" data-unit="points"></div>
-</section>
-
-<section id="replays">
-  <h2>Replays</h2>
-  <div class="mid">
-    <p>The two replays below are full meta-episodes from the paper's homogeneous setting: five copies of Claude Opus 5.5 play five trials on one hidden configuration. The video shows one frame per step, drawn as the world was when the agents decided. The panel next to it shows what every agent wrote at that step: its action, its reasoning, its goal, the notes it keeps, and the facts the harness has recorded for it.</p>
-  </div>
-
-  <h3>OpenCleanup · Claude Opus 5.5</h3>
-  <div class="mid"><p>5 agents, 5 trials of 400 steps. The score of a trial is the number of apples the team ate. A yellow overlay marks the cells an agent fires at.</p></div>
-  <div class="player" data-game="cleanup" data-dir="replays/cleanup" data-unit="apples"></div>
-
-  <h3>OpenHarvest · Claude Opus 5.5</h3>
-  <div class="mid"><p>5 agents, 5 trials of up to 300 steps. The score of a trial is the team's points. A trial's replay ends when the last apple is gone, because nothing can regrow after that and the remaining steps were skipped in the run. A yellow overlay marks the cells an agent zaps.</p></div>
-  <div class="player" data-game="harvest" data-dir="replays/harvest" data-unit="points"></div>
 </section>
 
 <section>
