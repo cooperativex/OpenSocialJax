@@ -71,6 +71,7 @@ video{width:100%;height:auto;display:block;border-radius:8px;background:#000;ima
 .board .bh{font-size:13px;color:var(--muted);margin-bottom:4px}
 .bpanel+.bpanel{margin-top:10px}
 .brow3{display:grid;grid-template-columns:minmax(0,1.25fr) 1fr 1fr;gap:14px;align-items:center;font-size:13.5px;padding:2px 0}
+.brow3.c3{grid-template-columns:minmax(0,1.3fr) 1fr 1fr 1fr;gap:10px}
 .brow3 .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .brow3 .duo{display:grid;grid-template-columns:1fr 34px;gap:6px;align-items:center}
 .brow3 .tk{height:12px;background:var(--soft);border-radius:3px;overflow:hidden}
@@ -203,6 +204,7 @@ footer{padding:26px 0 50px;color:var(--muted);font-size:14px;border-top:1px soli
   <div class="player" data-game="cleanup" data-dir="replays/arena_cleanup" data-unit="apples"></div>
 
   <h3>OpenHarvest · mixed arena</h3>
+  <div class="mid"><p>Below the video, the board shows every agent's points, apples and zaps so far in the trial. A zap sends the agent it hits back to the spawn row and disables it for 12 steps.</p></div>
   <div class="player" data-game="harvest" data-dir="replays/arena_harvest" data-unit="points"></div>
 </section>
 
@@ -296,7 +298,19 @@ function Player(root){
         r.append(nm,cell(a.s[0],tA,i),cell(a.s[1],tC,i)); b.append(r);
       });
       board.append(b);
-    } else panel("Points earned so far in this trial",0,Math.max(...data.final.map(x=>x.return)),a=>"· "+a.s[1]+" apples");
+    } else {
+      const tP=Math.max(1,...data.final.map(x=>x.return)), tE=Math.max(1,...data.final.map(x=>x.apples)), tZ=Math.max(1,...data.zaps);
+      const b=el("div","bpanel"), hd=el("div","brow3 c3 bh");
+      hd.append(el("div",null,"So far in this trial"),el("div",null,"Points"),el("div",null,"Apples eaten"),el("div",null,"Zaps fired")); b.append(hd);
+      const cell=(v,top,i)=>{ const c=el("div","duo"), tk=el("div","tk"), fl=el("div","fl"); fl.style.width=Math.min(100,100*v/top)+"%"; fl.style.background=COLORS[i]; tk.append(fl);
+        c.append(tk,el("div","vl",fmt(v))); return c; };
+      row.forEach((a,i)=>{
+        const r=el("div","brow3 c3"), nm=el("div","nm"), d=el("span","dot"); d.style.background=COLORS[i]; d.style.marginRight="6px";
+        nm.append(d,document.createTextNode(who(i))); nm.title=who(i);
+        r.append(nm,cell(a.s[0],tP,i),cell(a.s[1],tE,i),cell(a.z,tZ,i)); b.append(r);
+      });
+      board.append(b);
+    }
     cards.replaceChildren();
     row.forEach((a,i)=>{
       if(!shown.has(i)) return;
@@ -325,7 +339,8 @@ function Player(root){
     note.textContent=tr.skipped?("The orchard was empty after step "+(tr.skipped[0]-1)+". Steps "+tr.skipped[0]+"–"+tr.skipped[1]+" were skipped in the run."):"";
     video.src=dir+"/trial"+tr.trial+".mp4"+V;
     fetch(dir+"/trial"+tr.trial+".json"+V).then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); }).then(d=>{
-      if(id!==loadId) return; data=d; range.max=d.steps-1; video.playbackRate=+speed.value; render(0);
+      if(id!==loadId) return; data=d;
+      const z=d.frames[0].map(()=>0); d.frames.forEach(r=>r.forEach((x,i)=>{ x.z=z[i]; if(x.act==="zap") z[i]++; })); d.zaps=z; range.max=d.steps-1; video.playbackRate=+speed.value; render(0);
     }).catch(e=>{ if(id===loadId) cards.replaceChildren(el("div","note","Could not load this trial ("+e.message+"). The page must be opened through a web server, not as a local file.")); });
   }
 
