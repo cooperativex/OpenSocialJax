@@ -86,6 +86,39 @@ video{width:100%;height:auto;display:block;border-radius:8px;background:#000;ima
 .card details{margin-top:5px;font-size:13px}
 .card summary{cursor:pointer;color:var(--accent)}
 .card pre{white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12px;background:var(--code);border-radius:6px;padding:8px 10px;margin:6px 0 0;max-height:280px;overflow:auto}
+/* results */
+:root{--s1:#2a78d6;--s2:#eb6834;--grid:#e1e0d9;--axis:#c3c2b7}
+@media (prefers-color-scheme: dark){:root{--s1:#3987e5;--s2:#d95926;--grid:#2c2c2a;--axis:#4a4a46}}
+.lead{font-size:18px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:18px 0}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.tile b{display:block;font-size:34px;line-height:1.1;font-variant-numeric:tabular-nums;font-weight:650}
+.tile span{font-size:14px;color:var(--muted)}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:14px 0}
+.charts.one{grid-template-columns:1fr}
+@media (max-width:820px){.charts{grid-template-columns:1fr}}
+.chart{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;position:relative}
+.chart h4{margin:0 0 2px;font-size:16px}
+.chart .sub{font-size:13px;color:var(--muted);margin:0 0 12px}
+.brow{display:grid;grid-template-columns:150px 1fr;align-items:center;gap:10px;padding:5px 0;border-radius:6px}
+.brow:hover{background:var(--soft)}
+.brow .lab{font-size:14px;text-align:right;white-space:nowrap}
+.track{position:relative;height:22px;border-left:1px solid var(--axis)}
+.bar{position:absolute;left:0;top:2px;height:18px;border-radius:0 4px 4px 0;min-width:1px}
+.val{position:absolute;top:0;line-height:22px;font-size:13px;font-variant-numeric:tabular-nums;padding-left:6px;white-space:nowrap}
+.ref{position:absolute;top:-3px;height:28px;width:0;border-left:2px solid var(--ink)}
+.ref::before{content:"";position:absolute;left:-6px;top:-5px;width:10px;height:10px;background:var(--ink);border:2px solid var(--panel);border-radius:50%;box-sizing:border-box;transform:translateX(0)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:10px}
+.legend i{display:inline-block;vertical-align:middle;margin-right:6px}
+.legend .sw{width:12px;height:12px;border-radius:3px}
+.legend .rf{width:0;height:14px;border-left:2px solid var(--ink)}
+.tip{position:fixed;z-index:20;pointer-events:none;background:var(--ink);color:var(--bg);font-size:13px;line-height:1.45;padding:7px 10px;border-radius:7px;max-width:260px;display:none}
+.tip b{display:block}
+details.tbl{margin-top:10px;font-size:13px}
+details.tbl summary{cursor:pointer;color:var(--accent)}
+details.tbl table{border-collapse:collapse;margin-top:8px;width:100%}
+details.tbl th,details.tbl td{border-bottom:1px solid var(--line);padding:4px 8px;text-align:right;font-variant-numeric:tabular-nums}
+details.tbl th:first-child,details.tbl td:first-child{text-align:left}
 pre.bib{font-family:var(--mono);font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:8px;padding:14px;overflow:auto}
 footer{padding:26px 0 50px;color:var(--muted);font-size:14px;border-top:1px solid var(--line);text-align:center}
 </style>
@@ -100,6 +133,7 @@ footer{padding:26px 0 50px;color:var(--muted);font-size:14px;border-top:1px soli
   <div class="btns">
     <a class="btn" href="https://arxiv.org/abs/2610.13710">Paper (arXiv)</a>
     <a class="btn" href="https://github.com/cooperativex/OpenSocialJax">Code</a>
+    <a class="btn alt" href="#arena">Mixed arena</a>
     <a class="btn alt" href="#replays">Replays</a>
   </div>
 </header>
@@ -140,6 +174,27 @@ footer{padding:26px 0 50px;color:var(--muted);font-size:14px;border-top:1px soli
     <img src="figures/open_harvest_overview.png" alt="OpenHarvest: environment components, sampling a latent configuration, instantiating and interacting" loading="lazy">
     <figcaption>OpenHarvest: the components, how a latent configuration is sampled, and one example configuration.</figcaption>
   </figure>
+</section>
+
+<section id="arena">
+  <h2>One model cleans, the others eat</h2>
+  <div class="mid">
+    <p class="lead">What happens when five different models share one world? In the mixed arena, Claude Opus 5.5, gpt-6-sol, GLM-5.3-Flash, DeepSeek V4.1 Flash and Qwen3.8-27B play together, one seat each, on the same three hidden configurations that the single-model teams played. No agent is told which model the others are.</p>
+    <h3>OpenCleanup</h3>
+    <p>Claude Opus 5.5 took over the river. It did three quarters of all the cleaning, and that kept apples growing for the whole team. It also ate fewer apples than three of the four models it was cleaning for. gpt-6-sol cleaned a quarter as much as Claude and ate two and a half times as many apples.</p>
+  </div>
+  <div class="tiles">
+    <div class="tile"><b>75%</b><span>of all waste cleared in the mixed team was cleared by Claude Opus 5.5</span></div>
+    <div class="tile"><b>117 vs 291</b><span>apples eaten by Claude Opus 5.5 and by gpt-6-sol in the mixed team</span></div>
+    <div class="tile"><b>303 → 117</b><span>apples per agent for Claude Opus 5.5: in a team of its own copies, then in the mixed team</span></div>
+  </div>
+  <div class="charts" id="arena-cleanup"></div>
+  <div class="mid">
+    <p>For the other models the mixed team is a better place than their own. gpt-6-sol eats three times as many apples as it does among copies of itself, Qwen3.8-27B four times, DeepSeek V4.1 Flash seven times. In their own teams the river is rarely clean enough for long; here someone else keeps it clean.</p>
+    <h3>OpenHarvest</h3>
+    <p>In OpenHarvest one careful agent cannot protect the orchard, because any other agent can eat what it leaves. The mixed team ate the orchard bare in all 15 trials, between step 53 and step 111 of 300. Claude Opus 5.5 earns 67.5 points per agent in a team of its own copies and 51.3 here, and the five models finish within 8 points of each other.</p>
+  </div>
+  <div class="charts one" id="arena-harvest"></div>
 </section>
 
 <section id="replays">
@@ -274,6 +329,46 @@ function Player(root){
   }).catch(()=>{ cards.replaceChildren(el("div","note","Could not load the replay data. The page must be opened through a web server, not as a local file.")); });
 }
 document.querySelectorAll(".player").forEach(Player);
+})();
+
+(function(){
+"use strict";
+const tip=document.createElement("div"); tip.className="tip"; document.body.append(tip);
+const f=x=>(Math.round(x*10)/10).toString();
+function chart(host,o){
+  const c=document.createElement("div"); c.className="chart";
+  const h=document.createElement("h4"); h.textContent=o.title; const sub=document.createElement("p"); sub.className="sub"; sub.textContent=o.sub; c.append(h,sub);
+  const max=Math.max(...o.rows.map(r=>Math.max(r.v,r.ref||0)))*1.18;
+  o.rows.forEach(r=>{
+    const row=document.createElement("div"); row.className="brow";
+    const lab=document.createElement("div"); lab.className="lab"; lab.textContent=r.name;
+    const tr=document.createElement("div"); tr.className="track";
+    const bar=document.createElement("div"); bar.className="bar"; bar.style.width=(100*r.v/max)+"%"; bar.style.background="var(--"+o.color+")";
+    const val=document.createElement("div"); val.className="val"; val.textContent=f(r.v); val.style.left=(100*r.v/max)+"%";
+    tr.append(bar);
+    if(r.ref!=null){ const m=document.createElement("div"); m.className="ref"; m.style.left=(100*r.ref/max)+"%"; tr.append(m);
+      if(Math.abs(r.ref-r.v)/max<0.09&&r.ref>r.v) val.style.left=(100*r.ref/max+1.5)+"%"; }
+    tr.append(val); row.append(lab,tr); c.append(row);
+    const show=e=>{ tip.replaceChildren(); const b=document.createElement("b"); b.textContent=r.name; tip.append(b,document.createTextNode(o.unit+": "+f(r.v)));
+      if(r.ref!=null){ tip.append(document.createElement("br"),document.createTextNode(o.refLabel+": "+f(r.ref))); }
+      tip.style.display="block"; const w=tip.offsetWidth; tip.style.left=Math.min(window.innerWidth-w-8,e.clientX+14)+"px"; tip.style.top=(e.clientY+14)+"px"; };
+    row.addEventListener("mousemove",show); row.addEventListener("mouseleave",()=>{tip.style.display="none";});
+  });
+  if(o.refLabel){ const lg=document.createElement("div"); lg.className="legend";
+    lg.innerHTML='<span><i class="sw" style="background:var(--'+o.color+')"></i>'+o.legend+'</span><span><i class="rf"></i>'+o.refLabel+'</span>'; c.append(lg); }
+  const d=document.createElement("details"); d.className="tbl"; const sm=document.createElement("summary"); sm.textContent="Table"; d.append(sm);
+  const t=document.createElement("table"); const hd=t.insertRow(); ["Model",o.unit].concat(o.refLabel?[o.refLabel]:[]).forEach(x=>{const th=document.createElement("th"); th.textContent=x; hd.append(th);});
+  o.rows.forEach(r=>{const tr=t.insertRow(); [r.name,f(r.v)].concat(r.ref!=null?[f(r.ref)]:[]).forEach(x=>{tr.insertCell().textContent=x;});});
+  d.append(t); c.append(d); host.append(c);
+}
+const N=["Claude Opus 5.5","gpt-6-sol","DeepSeek V4.1 Flash","GLM-5.3-Flash","Qwen3.8-27B"];
+const rows=(v,ref)=>N.map((n,i)=>({name:n,v:v[i],ref:ref?ref[i]:null}));
+const note="Total over five trials, mean of three configurations.";
+chart(document.getElementById("arena-cleanup"),{title:"Waste cells cleared in the mixed team",sub:note,color:"s1",unit:"Waste cells cleared",rows:rows([178.0,46.7,12.0,0,0])});
+chart(document.getElementById("arena-cleanup"),{title:"Apples eaten",sub:note,color:"s2",unit:"Apples in the mixed team",legend:"In the mixed team",
+  refLabel:"Per agent in a team of its own copies",rows:rows([116.7,291.0,184.7,107.7,198.7],[303.1,97.5,25.7,106.9,49.3])});
+chart(document.getElementById("arena-harvest"),{title:"Points earned in OpenHarvest",sub:note,color:"s2",unit:"Points in the mixed team",legend:"In the mixed team",
+  refLabel:"Per agent in a team of its own copies",rows:rows([51.3,49.6,47.2,49.9,43.7],[67.5,51.0,44.4,43.2,46.5])});
 })();
 </script>
 </body>
