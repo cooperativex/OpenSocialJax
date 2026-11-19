@@ -67,6 +67,14 @@ video{width:100%;height:auto;display:block;border-radius:8px;background:#000;ima
 .controls input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}
 .status{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;margin-top:8px;font-variant-numeric:tabular-nums}
 .status b{font-weight:600}
+.board{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+.board .bh{font-size:13px;color:var(--muted);margin-bottom:4px}
+.brow2{display:grid;grid-template-columns:minmax(0,190px) 1fr 118px;gap:8px;align-items:center;font-size:13.5px;padding:2px 0}
+.brow2 .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brow2 .tk{height:12px;background:var(--soft);border-radius:3px;overflow:hidden}
+.brow2 .fl{height:100%;border-radius:0 3px 3px 0}
+.brow2 .vl{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.brow2 .vl small{color:var(--muted)}
 .hint{font-size:13px;color:var(--muted);margin-top:6px}
 .note{font-size:13px;color:var(--warn);margin-top:6px}
 .filter{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
@@ -228,7 +236,8 @@ function Player(root){
   speed.setAttribute("aria-label","playback speed");
   controls.append(bPlay,bPrev,bNext,range,speed);
   const status=el("div","status"), note=el("div","note"), hint=el("div","hint","Keyboard, when the player has focus: space plays or pauses, ← and → step.");
-  left.append(video,controls,status,note,hint);
+  const board=el("div","board");
+  left.append(video,controls,status,note,board,hint);
   const filter=el("div","filter"), cards=el("div","cards");
   right.append(filter,cards); stage.append(left,right); root.append(tabs,stage); root.tabIndex=0;
 
@@ -253,6 +262,15 @@ function Player(root){
     const add=(k,v)=>{const s=el("span"); s.append(document.createTextNode(k+" "),el("b",null,v)); status.append(s);};
     add("Trial",data.trial+" of "+idx.trials.length); add("Step",t+" of "+data.inner);
     add("Team "+unit+" so far",fmt(team)); add("Trial total",fmt(data.team));
+    board.replaceChildren(el("div","bh","Reward of each agent so far in this trial ("+unit+")"));
+    const top=Math.max(1,...data.final.map(x=>x.return));
+    row.forEach((a,i)=>{
+      const r=el("div","brow2"), nm=el("div","nm"), d=el("span","dot"); d.style.background=COLORS[i]; d.style.marginRight="6px";
+      nm.append(d,document.createTextNode(who(i))); nm.title=who(i);
+      const tk=el("div","tk"), fl=el("div","fl"); fl.style.width=Math.min(100,100*a.s[0]/top)+"%"; fl.style.background=COLORS[i]; tk.append(fl);
+      const vl=el("div","vl"); vl.append(document.createTextNode(fmt(a.s[0])+" "), el("small",null,game==="cleanup"?"· "+a.s[1]+" cleared":"· "+a.s[1]+" apples"));
+      r.append(nm,tk,vl); board.append(r);
+    });
     cards.replaceChildren();
     row.forEach((a,i)=>{
       if(!shown.has(i)) return;
