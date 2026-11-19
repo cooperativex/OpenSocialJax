@@ -39,10 +39,6 @@ h3{font-size:19px;margin:26px 0 8px}
 p{margin:0 0 14px}
 .abstract{font-size:17px;text-align:justify;hyphens:auto}
 figure{margin:18px 0}
-.maps{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
-.maps figure{margin:10px 0}
-.maps img{image-rendering:pixelated}
-@media (max-width:760px){.maps{grid-template-columns:1fr}}
 figure img{width:100%;height:auto;border-radius:8px;border:1px solid var(--line);background:#fff;display:block}
 figcaption{font-size:14px;color:var(--muted);margin-top:8px}
 .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:16px 0}
@@ -117,16 +113,10 @@ footer{padding:26px 0 50px;color:var(--muted);font-size:14px;border-top:1px soli
   <div class="mid">
     <p>OpenSocialJax has two environments, both written in JAX. Each one takes a classic sequential social dilemma and adds a latent configuration: a map and a set of hidden rules, sampled once per meta-episode from held-out splits. A meta-episode is five trials on the same configuration. The world is laid out again at the start of every trial, and the agents keep what they learned. Rewards are individual.</p>
   </div>
-  <div class="maps">
-    <figure>
-      <img src="figures/open_cleanup_maps.gif?v=3" alt="OpenCleanup on a series of held-out maps, five agents each" width="598" height="448">
-      <figcaption>OpenCleanup: held-out maps. The river, the stations, the orchard, the spawn positions and the waste hue change from one configuration to the next.</figcaption>
-    </figure>
-    <figure>
-      <img src="figures/open_harvest_maps.gif?v=3" alt="OpenHarvest on a series of held-out maps, five agents each" width="768" height="576">
-      <figcaption>OpenHarvest: held-out maps. The patch positions, the patch colours and the spawn row change from one configuration to the next.</figcaption>
-    </figure>
-  </div>
+  <figure>
+    <img src="figures/env_mosaic.png" alt="OpenCleanup (top) and OpenHarvest (bottom) on different held-out maps, five agents each" loading="lazy">
+    <figcaption>OpenCleanup (top) and OpenHarvest (bottom) on different held-out maps, five agents each.</figcaption>
+  </figure>
 
   <div class="mid">
     <h3>OpenCleanup</h3>
