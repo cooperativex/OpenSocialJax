@@ -121,7 +121,10 @@ video{width:100%;height:auto;display:block;border-radius:6px;background:#000;ima
 .paperfig figcaption{color:#444;font-size:13px;margin-top:2px}
 .paperfig .legendimg{margin-top:8px}
 .figcap{font-size:14px;color:var(--muted);margin:0 0 18px}
-pre.bib{font-family:var(--mono);font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:14px;overflow:auto}
+pre.bib{font-family:var(--mono);font-size:13px;background:#fff;border:2px solid var(--ink);border-radius:0;padding:14px;overflow:auto;margin:0;box-shadow:0 4px 0 var(--ink)}
+.bibwrap{position:relative}
+.copy{position:absolute;top:10px;right:10px;border:2px solid var(--ink);background:var(--water);color:#fff;border-radius:0;padding:2px 11px 3px;font-family:var(--px);font-weight:600;font-size:16px;cursor:pointer;box-shadow:0 3px 0 var(--ink);transition:transform .05s,box-shadow .05s}
+.copy:active{transform:translateY(3px);box-shadow:0 0 0 var(--ink)}
 footer{padding:24px 20px 28px;color:var(--muted);font-size:14px;text-align:center}
 footer a{color:var(--water-dk)}
 </style>
@@ -224,13 +227,14 @@ footer a{color:var(--water-dk)}
 <section>
   <div class="narrow">
     <h2>BibTeX</h2>
+<div class="bibwrap"><button class="copy" type="button">Copy</button>
 <pre class="bib">@article{guo2026opensocialjax,
   title   = {OpenSocialJax: Evaluating Social Adaptation in Sequential Social Dilemmas
              with Open-Ended Environmental Dynamics},
   author  = {Guo, Zihao and Fang, Meng and Leibo, Joel Z. and Du, Yali},
   journal = {arXiv preprint arXiv:2610.13710},
   year    = {2026}
-}</pre>
+}</pre></div>
   </div>
 </section>
 
@@ -246,6 +250,12 @@ const COLORS=["#e6194b","#f58230","#ffe119","#f032e6","#46f0f0"], LETTERS="ABCDE
 const el=(tag,cls,text)=>{const e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e;};
 const fmt=x=>Number.isInteger(x)?String(x):x.toFixed(2);
 
+document.querySelectorAll(".copy").forEach(b=>b.onclick=()=>{
+  const t=b.parentNode.querySelector("pre").textContent;
+  const done=()=>{b.textContent="Copied!"; setTimeout(()=>b.textContent="Copy",1400);};
+  if(navigator.clipboard) navigator.clipboard.writeText(t).then(done,()=>{});
+  else{const a=document.createElement("textarea"); a.value=t; document.body.append(a); a.select(); document.execCommand("copy"); a.remove(); done();}
+});
 function Player(root){
   const V="?v=4", dir=root.dataset.dir, game=root.dataset.game, unit=root.dataset.unit;
   let idx=null, data=null, cur=-1, shown=new Set([0]), open={}, loadId=0;
