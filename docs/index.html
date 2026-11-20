@@ -60,10 +60,12 @@ figcaption{font-size:14px;color:var(--muted);margin-top:8px}
 
 /* replay player */
 .player{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;margin-top:14px}
-.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
-.tab{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:6px;padding:6px 12px;font:inherit;font-size:14px;cursor:pointer;text-align:left;line-height:1.25}
-.tab small{display:block;color:var(--muted);font-size:12px}
-.tab[aria-selected="true"]{background:var(--water);border-color:var(--water);color:#fff}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:15px}
+.tab{border:2px solid var(--ink);background:#fff;color:var(--ink);border-radius:0;padding:5px 12px 6px;font-family:var(--px);font-weight:600;font-size:17px;cursor:pointer;text-align:left;line-height:1.2;box-shadow:0 3px 0 var(--ink);transition:transform .05s,box-shadow .05s}
+.tab:hover{background:var(--soft)}
+.tab:active,.tab[aria-selected="true"]{transform:translateY(3px);box-shadow:0 0 0 var(--ink)}
+.tab small{display:block;color:var(--muted);font-family:var(--sans);font-weight:400;font-size:12px}
+.tab[aria-selected="true"]{background:var(--water);color:#fff}
 .tab[aria-selected="true"] small{color:#fff;opacity:.9}
 .stage{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px;align-items:start}
 @media (max-width:900px){.stage{grid-template-columns:1fr}}
@@ -71,7 +73,13 @@ figcaption{font-size:14px;color:var(--muted);margin-top:8px}
 @media (max-width:900px){.screen{position:static}}
 video{width:100%;height:auto;display:block;border-radius:6px;background:#000;image-rendering:pixelated}
 .controls{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
-.controls button,.controls select{border:1px solid var(--line);background:var(--soft);color:var(--ink);border-radius:6px;padding:5px 10px;font:inherit;font-size:14px;cursor:pointer}
+.controls button,.controls select{border:2px solid var(--ink);background:#fff;color:var(--ink);border-radius:0;padding:3px 11px 4px;font-family:var(--px);font-weight:600;font-size:16px;cursor:pointer;box-shadow:0 3px 0 var(--ink);margin-bottom:3px;transition:transform .05s,box-shadow .05s}
+.controls button:hover,.controls select:hover{background:var(--soft)}
+.controls button:active{transform:translateY(3px);box-shadow:0 0 0 var(--ink)}
+.controls button:first-child{background:var(--water);color:#fff;min-width:74px}
+.controls input[type=range]{-webkit-appearance:none;appearance:none;height:8px;background:#fff;border:2px solid var(--ink);border-radius:0}
+.controls input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:20px;background:var(--water);border:2px solid var(--ink);border-radius:0;cursor:pointer}
+.controls input[type=range]::-moz-range-thumb{width:10px;height:16px;background:var(--water);border:2px solid var(--ink);border-radius:0;cursor:pointer}
 .controls input[type=range]{flex:1;min-width:120px;accent-color:var(--water)}
 .status{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;margin-top:8px;font-variant-numeric:tabular-nums}
 .status b{font-weight:600}
@@ -87,8 +95,8 @@ video{width:100%;height:auto;display:block;border-radius:6px;background:#000;ima
 .hint{font-size:13px;color:var(--muted);margin-top:6px}
 .note{font-size:13px;color:var(--warn);margin-top:6px}
 .filter{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
-.chipbtn{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:3px 11px;font:inherit;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
-.chipbtn[aria-pressed="true"]{background:var(--soft);border-color:var(--water)}
+.chipbtn{border:2px solid var(--ink);background:#fff;color:var(--ink);border-radius:0;padding:2px 10px;font:inherit;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 0 var(--ink);margin-bottom:2px;opacity:.6}
+.chipbtn[aria-pressed="true"]{background:var(--soft);transform:translateY(2px);box-shadow:none;opacity:1}
 .dot{width:11px;height:11px;display:inline-block;border:1.5px solid var(--ink);flex:none}
 .cards{display:flex;flex-direction:column;gap:8px;max-height:760px;overflow:auto;padding-right:2px}
 .card{border:1px solid var(--line);border-left-width:6px;border-radius:6px;padding:9px 12px;background:var(--bg)}
